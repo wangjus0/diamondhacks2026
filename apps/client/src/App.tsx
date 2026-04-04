@@ -13,6 +13,7 @@ export function App() {
 
   const turnState = useSessionStore((s) => s.turnState);
   const intent = useSessionStore((s) => s.intent);
+  const actionStatuses = useSessionStore((s) => s.actionStatuses);
   const error = useSessionStore((s) => s.error);
 
   const micDisabled =
@@ -66,6 +67,34 @@ export function App() {
           >
             Intent: <strong>{intent.intent}</strong> (confidence:{" "}
             {(intent.confidence * 100).toFixed(0)}%)
+          </div>
+        )}
+
+        {/* Action Status Feed */}
+        {actionStatuses.length > 0 && (
+          <div
+            style={{
+              padding: "12px 16px",
+              background: "#1e1e2e",
+              borderRadius: "8px",
+              borderLeft: "3px solid #89b4fa",
+            }}
+          >
+            <h4 style={{ margin: "0 0 8px", color: "#89b4fa", fontSize: "14px" }}>
+              Browser Actions
+            </h4>
+            {actionStatuses.map((msg, i) => (
+              <div
+                key={i}
+                style={{
+                  fontSize: "13px",
+                  color: "#a6adc8",
+                  padding: "2px 0",
+                }}
+              >
+                {msg}
+              </div>
+            ))}
           </div>
         )}
 

@@ -9,6 +9,7 @@ export interface SessionState {
   transcriptFinals: string[];
   intent: IntentResult | null;
   narrationText: string;
+  actionStatuses: string[];
   error: string | null;
 
   // Actions
@@ -19,6 +20,8 @@ export interface SessionState {
   addTranscriptFinal: (text: string) => void;
   setIntent: (intent: IntentResult | null) => void;
   setNarrationText: (text: string) => void;
+  addActionStatus: (message: string) => void;
+  clearActionStatuses: () => void;
   setError: (error: string | null) => void;
   reset: () => void;
 }
@@ -31,6 +34,7 @@ const initialState = {
   transcriptFinals: [] as string[],
   intent: null,
   narrationText: "",
+  actionStatuses: [] as string[],
   error: null,
 };
 
@@ -45,6 +49,9 @@ export const useSessionStore = create<SessionState>((set) => ({
     set((s) => ({ transcriptFinals: [...s.transcriptFinals, text] })),
   setIntent: (intent) => set({ intent }),
   setNarrationText: (text) => set({ narrationText: text }),
+  addActionStatus: (message) =>
+    set((s) => ({ actionStatuses: [...s.actionStatuses, message] })),
+  clearActionStatuses: () => set({ actionStatuses: [] }),
   setError: (error) => set({ error }),
   reset: () => set(initialState),
 }));

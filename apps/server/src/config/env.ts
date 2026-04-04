@@ -9,7 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   ELEVEN_LABS_API_KEY: z.string().min(1, "ELEVEN_LABS_API_KEY is required"),
-  BROWSER_USE_API_KEY: z.string().default(""),
+  BROWSER_USE_API_KEY: z.string().min(1, "BROWSER_USE_API_KEY is required"),
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
 });
 

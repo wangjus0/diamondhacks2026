@@ -8,6 +8,7 @@ import { parseClientEvent } from "@diamond/shared";
 import { SttAdapter } from "../voice/stt.js";
 import { handleTranscriptFinal } from "../orchestrator/orchestrator.js";
 import { env } from "../config/env.js";
+import type { BrowserAdapter } from "../tools/browser/adapter.js";
 
 type SessionTurnState = Extract<ServerEvent, { type: "state" }>['state']
 
@@ -18,6 +19,7 @@ export class Session {
   private ai: GoogleGenAI;
   private stt: SttAdapter | null = null;
   private accumulatedTranscript = "";
+  private browserAdapter: BrowserAdapter | null = null;
 
   constructor(ws: WebSocket, ai: GoogleGenAI) {
     this.id = crypto.randomUUID();
@@ -51,6 +53,10 @@ export class Session {
 
   getState(): SessionTurnState {
     return this.state;
+  }
+
+  setBrowserAdapter(adapter: BrowserAdapter | null): void {
+    this.browserAdapter = adapter;
   }
 
   // ── Incoming ───────────────────────────────────────────────
@@ -134,6 +140,10 @@ export class Session {
     if (this.stt) {
       this.stt.close();
       this.stt = null;
+    }
+    if (this.browserAdapter) {
+      this.browserAdapter.cancel();
+      this.browserAdapter = null;
     }
     this.setState("idle");
   }

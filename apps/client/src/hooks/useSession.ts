@@ -34,6 +34,9 @@ export function useSession(
         case "intent":
           store.getState().setIntent(event.intent);
           break;
+        case "action_status":
+          store.getState().addActionStatus(event.message);
+          break;
         case "narration_text":
           store.getState().setNarrationText(event.text);
           break;
@@ -42,6 +45,7 @@ export function useSession(
           break;
         case "done":
           store.getState().setTurnState("idle");
+          store.getState().clearActionStatuses();
           break;
         case "error":
           store.getState().setError(event.message);
