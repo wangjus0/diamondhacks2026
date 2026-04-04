@@ -19,24 +19,14 @@ export class BrowserAdapter {
     query: string,
     callbacks: BrowserTaskCallbacks
   ): Promise<string> {
-    const prompt =
-      `Navigate to google.com, search for '${query}', and collect the top 5 result titles and URLs. ` +
-      `Return results as a numbered list with title and URL for each.`;
-
-    return this.runTask(prompt, callbacks);
+    return this.runTask(buildSearchTaskPrompt(query), callbacks);
   }
 
   async runFormFillDraft(
     query: string,
     callbacks: BrowserTaskCallbacks
   ): Promise<string> {
-    const prompt =
-      `Based on this request: '${query}', navigate to the appropriate website. ` +
-      `Find the relevant form and fill it out with reasonable values based on the request. ` +
-      `Do NOT submit the form. Do NOT click any submit, pay, checkout, or confirmation buttons. ` +
-      `Report which fields were filled and with what values.`;
-
-    return this.runTask(prompt, callbacks);
+    return this.runTask(buildFormFillDraftTaskPrompt(query), callbacks);
   }
 
   async cancel(): Promise<void> {
@@ -162,6 +152,22 @@ export class BrowserAdapter {
     this.currentSessionId = null;
     return "Task was interrupted.";
   }
+}
+
+export function buildSearchTaskPrompt(query: string): string {
+  return (
+    `Navigate to google.com, search for '${query}', and collect the top 5 result titles and URLs. ` +
+    `Return results as a numbered list with title and URL for each.`
+  );
+}
+
+export function buildFormFillDraftTaskPrompt(query: string): string {
+  return (
+    `Based on this request: '${query}', navigate to the appropriate website. ` +
+    `Find the relevant form and fill it out with reasonable values based on the request. ` +
+    `Do NOT submit the form. Do NOT click any submit, pay, checkout, or confirmation buttons. ` +
+    `Report which fields were filled and with what values.`
+  );
 }
 
 function sleep(ms: number): Promise<void> {
