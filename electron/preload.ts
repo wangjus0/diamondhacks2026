@@ -24,6 +24,7 @@ const desktopApi = Object.freeze({
   openExternalUrl: (url: string) => ipcRenderer.invoke("system:open-external-url", url),
   shortcut: {
     closePopover: () => ipcRenderer.invoke("shortcut:close-popover"),
+    showPopover: () => ipcRenderer.invoke("shortcut:show-popover"),
     repositionPopover: (position: "center" | "top-right") =>
       ipcRenderer.invoke("shortcut:reposition-popover", position),
     resizePopover: (width: number, height: number) =>

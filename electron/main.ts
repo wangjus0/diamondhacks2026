@@ -1,7 +1,18 @@
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import { app, BrowserWindow, globalShortcut, ipcMain, screen, session, shell, safeStorage, systemPreferences } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  globalShortcut,
+  ipcMain,
+  screen,
+  session,
+  shell,
+  safeStorage,
+  systemPreferences,
+} from "electron";
 import { readSupabasePublicConfig, type SupabasePublicConfig } from "./supabaseConfig";
 import { createMainWindow, getMainWindow } from "./windows/mainWindow";
 import { createVoicePopoverWindow } from "./windows/voicePopoverWindow";
@@ -10,6 +21,42 @@ import { isMicrophonePermission, isTrustedMicrophoneRequest } from "./permission
 import { PendingOAuthCallbackStore } from "./oauthCallback";
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
+if (process.platform === "darwin" && !process.env.OS_ACTIVITY_MODE) {
+  process.env.OS_ACTIVITY_MODE = "disable";
+}
+
+const MACOS_MENU_MODEL_WARNING =
+  "representedObject is not a WeakPtrToElectronMenuModelAsNSObject";
+
+function suppressKnownMacOsElectronMenuWarning(): void {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: unknown, encoding?: BufferEncoding | ((error?: Error | null) => void), cb?: (error?: Error | null) => void) => {
+    const callback = typeof encoding === "function" ? encoding : cb;
+    const normalizedEncoding = typeof encoding === "string" ? encoding : undefined;
+    const text =
+      typeof chunk === "string"
+        ? chunk
+        : Buffer.isBuffer(chunk)
+          ? chunk.toString(normalizedEncoding ?? "utf8")
+          : String(chunk ?? "");
+
+    if (text.includes(MACOS_MENU_MODEL_WARNING)) {
+      if (callback) {
+        callback(null);
+      }
+      return true;
+    }
+
+    return originalWrite(chunk as never, encoding as never, cb);
+  }) as typeof process.stderr.write;
+}
+
+suppressKnownMacOsElectronMenuWarning();
 
 let appReady = false;
 const pendingOAuthCallbackStore = new PendingOAuthCallbackStore();
@@ -27,6 +74,83 @@ const OAUTH_CALLBACK_EVENT = "auth:oauth-callback";
 const AUTH_STORE_FILENAME = "auth-session-store.bin";
 const PROFILE_SYNC_COMMAND = "curl -fsSL https://browser-use.com/profile.sh | sh";
 const PROFILE_SYNC_TIMEOUT_MS = 10 * 60 * 1000;
+
+function setupStableApplicationMenu(): void {
+  const commonViewSubmenu: Electron.MenuItemConstructorOptions[] = [
+    { role: "reload" },
+    { role: "forceReload" },
+    { role: "toggleDevTools" },
+    { type: "separator" },
+    { role: "resetZoom" },
+    { role: "zoomIn" },
+    { role: "zoomOut" },
+    { type: "separator" },
+    { role: "togglefullscreen" },
+  ];
+
+  const template: Electron.MenuItemConstructorOptions[] =
+    process.platform === "darwin"
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          },
+          {
+            label: "Edit",
+            submenu: [
+              { role: "undo" },
+              { role: "redo" },
+              { type: "separator" },
+              { role: "cut" },
+              { role: "copy" },
+              { role: "paste" },
+              { role: "pasteAndMatchStyle" },
+              { role: "delete" },
+              { role: "selectAll" },
+            ],
+          },
+          { label: "View", submenu: commonViewSubmenu },
+          {
+            label: "Window",
+            submenu: [
+              { role: "minimize" },
+              { role: "zoom" },
+              { type: "separator" },
+              { role: "front" },
+            ],
+          },
+        ]
+      : [
+          {
+            label: "File",
+            submenu: [{ role: "quit" }],
+          },
+          {
+            label: "Edit",
+            submenu: [
+              { role: "undo" },
+              { role: "redo" },
+              { type: "separator" },
+              { role: "cut" },
+              { role: "copy" },
+              { role: "paste" },
+              { role: "delete" },
+              { role: "selectAll" },
+            ],
+          },
+          { label: "View", submenu: commonViewSubmenu },
+        ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 function registerMediaPermissionHandlers(): void {
   const defaultSession = session.defaultSession;
@@ -520,23 +644,69 @@ function registerShortcutIpcHandlers(): void {
     hideVoicePopover();
   });
 
+  ipcMain.handle("shortcut:show-popover", () => {
+    const win = getOrCreateVoicePopover();
+    if (!win.isVisible()) {
+      voicePopoverOpenedAtMs = Date.now();
+      voicePopoverOpenedFromBackground = BrowserWindow.getFocusedWindow() === null;
+      win.show();
+      win.focus();
+    }
+  });
+
+  let repositionAnimationId: ReturnType<typeof setInterval> | null = null;
+
   ipcMain.handle("shortcut:reposition-popover", (_event, position: "center" | "top-right") => {
     if (!voicePopoverWindow || voicePopoverWindow.isDestroyed()) return;
     const primaryDisplay = screen.getPrimaryDisplay();
     const { x: waX, y: waY, width: waW, height: waH } = primaryDisplay.workArea;
-    // Always use base pill size for consistent positioning
     const baseW = 430;
-    const baseH = 86;
+    const baseH = 130;
 
+    let targetX: number;
+    let targetY: number;
     if (position === "top-right") {
-      const x = Math.round(waX + waW - baseW - 16);
-      const y = Math.round(waY + 16);
-      voicePopoverWindow.setPosition(x, y);
+      targetX = Math.round(waX + waW - baseW - 16);
+      targetY = Math.round(waY + 16);
     } else {
-      const x = Math.round(waX + (waW - baseW) / 2);
-      const y = Math.round(waY + waH * 0.75 - baseH / 2);
-      voicePopoverWindow.setPosition(x, y);
+      // Anchor to the pill's vertical center on screen (padding 8 + half pill 34 = 42px from window top)
+      // This keeps the pill at the same Y regardless of whether the response card is open or not
+      const PILL_TOP_OFFSET = 42;
+      targetX = Math.round(waX + (waW - baseW) / 2);
+      targetY = Math.round(waY + waH * 0.75 - PILL_TOP_OFFSET);
     }
+
+    // Cancel any in-progress animation
+    if (repositionAnimationId !== null) {
+      clearInterval(repositionAnimationId);
+      repositionAnimationId = null;
+    }
+
+    const [startX, startY] = voicePopoverWindow.getPosition();
+    const DURATION_MS = 380;
+    const INTERVAL_MS = 10;
+    const startTime = Date.now();
+
+    // Ease-out cubic: t=0→1, output=0→1 with deceleration
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    repositionAnimationId = setInterval(() => {
+      if (!voicePopoverWindow || voicePopoverWindow.isDestroyed()) {
+        clearInterval(repositionAnimationId!);
+        repositionAnimationId = null;
+        return;
+      }
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(elapsed / DURATION_MS, 1);
+      const ease = easeOutCubic(t);
+      const x = Math.round(startX + (targetX - startX) * ease);
+      const y = Math.round(startY + (targetY - startY) * ease);
+      voicePopoverWindow.setPosition(x, y);
+      if (t >= 1) {
+        clearInterval(repositionAnimationId!);
+        repositionAnimationId = null;
+      }
+    }, INTERVAL_MS);
   });
 
   ipcMain.handle("shortcut:resize-popover", (_event, width: number, height: number) => {
@@ -577,6 +747,7 @@ async function bootstrap(): Promise<void> {
   }
   await app.whenReady();
   registerAsDefaultProtocolClient();
+  setupStableApplicationMenu();
 
   registerAuthIpcHandlers(supabaseConfig);
   registerShortcutIpcHandlers();

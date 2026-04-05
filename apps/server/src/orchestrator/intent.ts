@@ -18,7 +18,7 @@ Classify the user's speech into exactly ONE of these intents:
 - "form_fill_draft": The user wants to fill out a form on a website (e.g. "fill out the contact form", "sign up for the newsletter", "enter my shipping address"). This is draft only - never submit.
 - "web_extract": The user wants to read, extract, or summarize content from a specific webpage (e.g. "read this page", "summarize that article", "what does this site say about X")
 - "multi_site_compare": The user wants to compare information across multiple websites (e.g. "compare prices on Amazon vs Best Buy", "which site has better reviews for X", "compare X across sites")
-- "clarify": The intent is unclear or ambiguous and you need more information.
+- "clarify": The intent is truly impossible to infer. Use this only as a last resort.
 
 Respond with JSON only:
 {
@@ -30,41 +30,84 @@ Respond with JSON only:
 }`;
 
 const FALLBACK: IntentResult = {
-  intent: "clarify",
-  confidence: 0,
+  intent: "search",
+  confidence: 0.5,
   query: "",
-  clarification: "I didn't understand that. Could you try rephrasing?",
 };
+
+function inferIntentFromTranscript(transcript: string): IntentResult["intent"] {
+  const text = transcript.toLowerCase();
+
+  const compareSignals =
+    /\b(compare|comparison|versus|vs\.?|better than|difference between)\b/.test(text) &&
+    /\b(and|vs|versus|between)\b/.test(text);
+  if (compareSignals) {
+    return "multi_site_compare";
+  }
+
+  const webExtractSignals =
+    /\b(read|extract|summarize|summary|what does this page say|from this page|on this page)\b/.test(
+      text
+    ) && /(https?:\/\/|website|webpage|page|site)/.test(text);
+  if (webExtractSignals) {
+    return "web_extract";
+  }
+
+  const formSignals =
+    /\b(fill|form|sign up|signup|register|apply|enter my|submit application|contact form)\b/.test(
+      text
+    );
+  if (formSignals) {
+    return "form_fill_draft";
+  }
+
+  return "search";
+}
 
 export async function classifyIntent(
   ai: GoogleGenAI,
-  transcript: string
+  transcript: string,
+  historyContext?: string
 ): Promise<IntentResult> {
   try {
+    const contextPrefix = historyContext
+      ? `[Conversation history]\n${historyContext}\n\n`
+      : "";
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `${SYSTEM_PROMPT}\n\nUser said: "${transcript}"`,
+      contents: `${SYSTEM_PROMPT}\n\n${contextPrefix}User said: "${transcript}"`,
       config: { responseMimeType: "application/json" },
     });
 
     const text = response.text;
-    if (!text) return { ...FALLBACK, query: transcript };
-
-    const parsed = intentResultSchema.parse(JSON.parse(text));
-
-    if (parsed.confidence < 0.6) {
+    if (!text) {
       return {
-        intent: "clarify",
-        confidence: parsed.confidence,
+        ...FALLBACK,
+        intent: inferIntentFromTranscript(transcript),
         query: transcript,
-        clarification:
-          parsed.clarification || "I'm not sure what you meant. Could you rephrase?",
       };
     }
 
-    return { ...parsed, query: transcript };
+    const parsed = intentResultSchema.parse(JSON.parse(text));
+    const inferredIntent = inferIntentFromTranscript(transcript);
+    const normalizedIntent =
+      parsed.intent === "clarify" ? inferredIntent : parsed.intent;
+
+    if (parsed.confidence < 0.6) {
+      return {
+        intent: normalizedIntent,
+        confidence: Math.max(parsed.confidence, 0.51),
+        query: transcript,
+      };
+    }
+
+    return { ...parsed, intent: normalizedIntent, query: transcript };
   } catch (err) {
     console.error("[Intent] Classification failed:", err);
-    return { ...FALLBACK, query: transcript };
+    return {
+      ...FALLBACK,
+      intent: inferIntentFromTranscript(transcript),
+      query: transcript,
+    };
   }
 }

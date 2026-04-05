@@ -10,6 +10,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   ELEVEN_LABS_API_KEY: z.string().min(1, "ELEVEN_LABS_API_KEY is required"),
   BROWSER_USE_API_KEY: z.string().min(1, "BROWSER_USE_API_KEY is required"),
+  BROWSER_USE_PROFILE_ID: z.string().optional(),
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
   SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL").optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),

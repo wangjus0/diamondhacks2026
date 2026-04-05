@@ -12,17 +12,21 @@ const SILENCE_TIMEOUT_MS = 3000;
 
 export function VoicePopover() {
   const audioPlayer = useAudioPlayer();
-  const { sendStartSession, sendAudioChunk, sendAudioEnd } = useSession(audioPlayer);
+  const { sendStartSession, sendAudioChunk, sendAudioEnd, sendInterrupt } = useSession(audioPlayer);
 
   const turnState = useSessionStore((s) => s.turnState);
   const narrationText = useSessionStore((s) => s.narrationText);
   const error = useSessionStore((s) => s.error);
   const setError = useSessionStore((s) => s.setError);
   const [barScales, setBarScales] = useState<number[]>(FLAT_SCALE);
+  const [workingElapsed, setWorkingElapsed] = useState(0);
+  const [entered, setEntered] = useState(false);
+  const [statusKey, setStatusKey] = useState(0);
   const isRecordingRef = useRef(false);
   const silenceStartRef = useRef<number | null>(null);
   const hasSpokenRef = useRef(false);
   const stopRecordingRef = useRef<(() => void) | null>(null);
+  const prevStatusRef = useRef("");
 
   // Treat audio playback as effectively "speaking" even after server sends idle
   const effectiveState = audioPlayer.isPlaying && turnState === "idle" ? "speaking" : turnState;
@@ -54,10 +58,8 @@ export function VoicePopover() {
         return prev.map((prevScale, index) => {
           const base = BASE_BAR_SCALE[index] ?? 0.5;
           const jitter = ((index % 3) - 1) * 0.04;
-          // Quiet → very small (0.08), loud → full height (1.2)
           const target = Math.max(0.08, Math.min(1.2, 0.08 + level * base * 1.5 + jitter));
-          // Fast attack, moderate decay
-          const smoothing = level > prevScale ? 0.6 : 0.35;
+          const smoothing = level > prevScale ? 0.65 : 0.3;
           const next = prevScale * (1 - smoothing) + target * smoothing;
           return Number(next.toFixed(3));
         });
@@ -68,42 +70,75 @@ export function VoicePopover() {
   // Keep stopRecording ref current for the silence auto-stop
   stopRecordingRef.current = stopRecording;
 
+  const responseCardRef = useRef<HTMLDivElement>(null);
+
   // Show response card when narration text exists and we're speaking or just finished
   const showResponseCard = Boolean(narrationText) && (effectiveState === "speaking" || effectiveState === "idle") && !isRecording;
+
+  const workingLabel =
+    workingElapsed < 6 ? "Investigating..." :
+    workingElapsed < 18 ? "Working on it..." :
+    "Almost done...";
 
   const statusMessage = error
     ? error
     : isRecording
       ? "Listening..."
       : effectiveState === "thinking"
-        ? "Processing..."
+        ? workingLabel
         : effectiveState === "acting"
-          ? "Working..."
+          ? workingLabel
           : effectiveState === "speaking"
             ? "Responding..."
-            : "Press Space to start";
+            : effectiveState === "listening"
+              ? "Processing..."
+              : "Press Space to start";
+
+  // Bump statusKey to re-trigger fade animation when text changes
+  useEffect(() => {
+    if (statusMessage !== prevStatusRef.current) {
+      prevStatusRef.current = statusMessage;
+      setStatusKey((k) => k + 1);
+    }
+  }, [statusMessage]);
 
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
 
+  // Entrance animation on mount
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Auto-show overlay when the response card becomes visible
+  useEffect(() => {
+    if (showResponseCard) {
+      window.desktop?.shortcut?.showPopover?.();
+    }
+  }, [showResponseCard]);
+
+  // Auto-scroll response card to bottom as narration text streams in
+  useEffect(() => {
+    if (responseCardRef.current) {
+      responseCardRef.current.scrollTop = responseCardRef.current.scrollHeight;
+    }
+  }, [narrationText]);
+
   // Resize window when response card shows/hides
   useEffect(() => {
     if (showResponseCard) {
-      window.desktop?.shortcut?.resizePopover?.(430, 260);
+      window.desktop?.shortcut?.resizePopover?.(430, 300);
     } else {
-      window.desktop?.shortcut?.resizePopover?.(430, 86);
+      window.desktop?.shortcut?.resizePopover?.(430, 130);
     }
   }, [showResponseCard]);
 
   // Animate bars when speaking, go flat when idle
-  // Move pill to top-right when waiting, back to center when recording
   useEffect(() => {
-    console.log("[VoicePopover] effectiveState:", effectiveState);
-
     if (effectiveState === "speaking") {
       window.desktop?.shortcut?.repositionPopover?.("center");
-      // Wave animation during TTS playback
       const id = setInterval(() => {
         const t = Date.now() / 1000;
         setBarScales(
@@ -117,8 +152,12 @@ export function VoicePopover() {
     }
 
     if (effectiveState === "thinking" || effectiveState === "acting") {
+      setWorkingElapsed(0);
+      const startTime = Date.now();
+      const elapsedId = setInterval(() => {
+        setWorkingElapsed(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
       window.desktop?.shortcut?.repositionPopover?.("top-right");
-      // Subtle loading wave — bars stay small but ripple left to right
       const id = setInterval(() => {
         const t = Date.now() / 1000;
         setBarScales(
@@ -128,10 +167,9 @@ export function VoicePopover() {
           })
         );
       }, 40);
-      return () => clearInterval(id);
+      return () => { clearInterval(id); clearInterval(elapsedId); };
     }
 
-    // Back to center when idle (ready for next recording)
     if (effectiveState === "idle" && !isRecordingRef.current) {
       window.desktop?.shortcut?.repositionPopover?.("center");
       setBarScales(FLAT_SCALE);
@@ -214,29 +252,60 @@ export function VoicePopover() {
 
   return (
     <div className="voice-popover-screen">
-      <section className="voice-popover-shell" aria-live="polite">
-        <button
-          type="button"
-          className={`voice-meter-pill ${isRecording || effectiveState === "speaking" ? "voice-meter-pill-live" : ""} ${error ? "voice-meter-pill-error" : ""}`}
-          disabled={!isRecording && micDisabled}
-          onClick={() => { void toggleRecording(); }}
-          title={error || (isRecording ? "Recording. Press Space to stop." : "Press Space to start.")}
-          aria-label={isRecording ? "Stop recording" : "Start recording"}
+      <section className={`voice-popover-shell ${entered ? "voice-popover-shell--entered" : ""}`} aria-live="polite">
+        <div className="voice-pill-wrapper">
+          <button
+            type="button"
+            className={`voice-meter-pill ${isRecording ? "voice-meter-pill--recording" : ""} ${effectiveState === "speaking" ? "voice-meter-pill--speaking" : ""} ${(effectiveState === "thinking" || effectiveState === "acting") ? "voice-meter-pill--working" : ""} ${error ? "voice-meter-pill-error" : ""}`}
+            disabled={!isRecording && micDisabled}
+            onClick={() => { void toggleRecording(); }}
+            title={error || (isRecording ? "Recording. Press Space to stop." : "Press Space to start.")}
+            aria-label={isRecording ? "Stop recording" : "Start recording"}
+          >
+            {Array.from({ length: BAR_COUNT }, (_value, index) => (
+              <span
+                key={index}
+                className="voice-meter-bar"
+                style={{
+                  height: `${Math.round((barScales[index] ?? 0.5) * 27)}px`,
+                }}
+              />
+            ))}
+          </button>
+          {(effectiveState === "thinking" || effectiveState === "acting") && (
+            <button
+              type="button"
+              className="voice-cancel-btn"
+              onClick={sendInterrupt}
+              title="Cancel task"
+              aria-label="Cancel task"
+            >
+              ✕
+            </button>
+          )}
+          {effectiveState === "speaking" && (
+            <button
+              type="button"
+              className="voice-cancel-btn"
+              onClick={() => audioPlayer.stop()}
+              title="Stop response"
+              aria-label="Stop response"
+            >
+              ■
+            </button>
+          )}
+        </div>
+        <p
+          key={statusKey}
+          className={`voice-popover-status ${error ? "voice-popover-status-error" : ""}`}
         >
-          {Array.from({ length: BAR_COUNT }, (_value, index) => (
-            <span
-              key={index}
-              className="voice-meter-bar"
-              style={{
-                height: `${Math.round((barScales[index] ?? 0.5) * 27)}px`,
-              }}
-            />
-          ))}
-        </button>
-        <p className={`voice-popover-status ${error ? "voice-popover-status-error" : ""}`}>{statusMessage}</p>
+          {statusMessage}
+        </p>
         {showResponseCard && (
           <div className="voice-response-card">
-            <p className="voice-response-text">{narrationText}</p>
+            <div className="voice-response-scroll" ref={responseCardRef}>
+              <p className="voice-response-text">{narrationText}</p>
+            </div>
           </div>
         )}
       </section>

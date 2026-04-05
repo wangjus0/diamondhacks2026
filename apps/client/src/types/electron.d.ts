@@ -12,6 +12,9 @@ type DesktopSupabaseConfig = {
 
 type DesktopShortcutApi = {
   closePopover: () => Promise<void>;
+  showPopover: () => Promise<void>;
+  repositionPopover: (position: "center" | "top-right") => Promise<void>;
+  resizePopover: (width: number, height: number) => Promise<void>;
 };
 
 type DesktopAuthApi = {

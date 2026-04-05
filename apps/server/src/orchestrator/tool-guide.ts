@@ -162,13 +162,18 @@ const FALLBACK_PLAN: ToolPlan = {
 export async function generateToolPlan(
   ai: GoogleGenAI,
   userRequest: string,
-  intent: string
+  intent: string,
+  historyContext?: string
 ): Promise<ToolPlan> {
   try {
+    const contextSection = historyContext
+      ? `[Conversation history]\n${historyContext}\n\n`
+      : "";
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents:
         `${TOOL_GUIDE_SYSTEM_PROMPT}\n\n` +
+        `${contextSection}` +
         `User request: "${userRequest}"\n` +
         `Classified intent: ${intent}`,
       config: { responseMimeType: "application/json" },

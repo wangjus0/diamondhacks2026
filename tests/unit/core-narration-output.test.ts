@@ -23,27 +23,20 @@ test("toCoreNarrationText removes procedural lines and keeps core result lines",
 });
 
 test("toCoreNarrationText limits the spoken result to core lines", () => {
-  const output = [
-    "1. A",
-    "2. B",
-    "3. C",
-    "4. D",
-    "5. E",
-    "6. F",
-  ].join("\n");
+  const output = Array.from({ length: 15 }, (_, i) => `${i + 1}. Item ${i + 1}`).join("\n");
 
   const result = toCoreNarrationText(output);
 
-  assert.equal(result, ["1. A", "2. B", "3. C", "4. D"].join("\n"));
+  assert.equal(result, Array.from({ length: 12 }, (_, i) => `${i + 1}. Item ${i + 1}`).join("\n"));
 });
 
 test("toCoreNarrationText truncates very long responses", () => {
   const longSentence =
-    "This is a very long response ".repeat(30) +
+    "This is a very long response ".repeat(60) +
     "and it should be trimmed to keep only the core information requested.";
   const result = toCoreNarrationText(longSentence);
 
-  assert.equal(result.length <= 423, true);
+  assert.equal(result.length <= 903, true);
 });
 
 test("toCoreNarrationText keeps original content when every line looks procedural", () => {

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import { createSocket, type Socket } from "../lib/ws";
 import {
+  hydrateBrowserProfileIdFromDesktop,
+  hydrateBrowserUseApiKeyFromDesktop,
   getStoredBrowserProfileId,
   getStoredBrowserUseApiKey,
 } from "../lib/browser-profile";
@@ -13,6 +15,13 @@ export function useSession(
 ) {
   const socketRef = useRef<Socket | null>(null);
   const store = useSessionStore;
+
+  useEffect(() => {
+    void Promise.all([
+      hydrateBrowserProfileIdFromDesktop(),
+      hydrateBrowserUseApiKeyFromDesktop(),
+    ]);
+  }, []);
 
   useEffect(() => {
     const url = resolveSessionSocketUrl({
@@ -95,13 +104,20 @@ export function useSession(
   }, []);
 
   const sendStartSession = useCallback(() => {
-    const profileId = getStoredBrowserProfileId();
-    const browserUseApiKey = getStoredBrowserUseApiKey();
-    socketRef.current?.send({
-      type: "start_session",
-      ...(profileId ? { profileId } : {}),
-      ...(browserUseApiKey ? { browserUseApiKey } : {}),
-    });
+    void (async () => {
+      await Promise.all([
+        hydrateBrowserProfileIdFromDesktop(),
+        hydrateBrowserUseApiKeyFromDesktop(),
+      ]);
+
+      const profileId = getStoredBrowserProfileId();
+      const browserUseApiKey = getStoredBrowserUseApiKey();
+      socketRef.current?.send({
+        type: "start_session",
+        ...(profileId ? { profileId } : {}),
+        ...(browserUseApiKey ? { browserUseApiKey } : {}),
+      });
+    })();
   }, []);
 
   const sendAudioChunk = useCallback((data: string) => {

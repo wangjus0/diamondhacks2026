@@ -16,7 +16,8 @@ export type PolicyActionKind =
   | "checkout"
   | "confirm"
   | "web_extract"
-  | "multi_site_compare";
+  | "multi_site_compare"
+  | "quick_answer";
 
 export interface PolicyAction {
   readonly kind: PolicyActionKind;

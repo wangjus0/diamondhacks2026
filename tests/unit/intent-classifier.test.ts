@@ -37,7 +37,7 @@ test("classifyIntent returns search result when confidence is high", async () =>
   });
 });
 
-test("classifyIntent falls back to clarify when confidence is low", async () => {
+test("classifyIntent proceeds proactively when confidence is low", async () => {
   const ai = createAi(
     JSON.stringify({
       intent: "form_fill_draft",
@@ -50,22 +50,20 @@ test("classifyIntent falls back to clarify when confidence is low", async () => 
   const result = await classifyIntent(ai, "fill something out for me");
 
   assert.deepEqual(result, {
-    intent: "clarify",
-    confidence: 0.42,
+    intent: "form_fill_draft",
+    confidence: 0.51,
     query: "fill something out for me",
-    clarification: "Which form should I fill out?",
   });
 });
 
-test("classifyIntent returns fallback clarify result when the model output is invalid", async () => {
+test("classifyIntent returns heuristic fallback when the model output is invalid", async () => {
   const ai = createAi("not json");
 
   const result = await classifyIntent(ai, "do the thing");
 
   assert.deepEqual(result, {
-    intent: "clarify",
-    confidence: 0,
+    intent: "search",
+    confidence: 0.5,
     query: "do the thing",
-    clarification: "I didn't understand that. Could you try rephrasing?",
   });
 });

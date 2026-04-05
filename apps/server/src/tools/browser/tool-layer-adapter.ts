@@ -2,6 +2,7 @@ import {
   BrowserUseAdapter,
   type BrowserTaskCallbacks,
   type BrowserTaskExecutor,
+  type BrowserTaskRunOptions,
 } from "./adapter.js";
 import { PlaywrightAdapter } from "./playwright-adapter.js";
 import { PuppeteerAdapter } from "./puppeteer-adapter.js";
@@ -12,10 +13,6 @@ interface ToolLayerAdapterOptions {
   browserUseApiKey: string;
   defaultEngine?: "auto" | BrowserToolEngine;
   engineOrder?: readonly BrowserToolEngine[];
-}
-
-interface BrowserTaskRunOptions {
-  allowSubmit?: boolean;
 }
 
 export class ToolLayerAdapter implements BrowserTaskExecutor {
@@ -36,11 +33,12 @@ export class ToolLayerAdapter implements BrowserTaskExecutor {
 
   async runSearch(
     query: string,
-    callbacks: BrowserTaskCallbacks
+    callbacks: BrowserTaskCallbacks,
+    options?: BrowserTaskRunOptions
   ): Promise<string> {
     return this.runWithFallback(
       "search",
-      (adapter) => adapter.runSearch(query, callbacks),
+      (adapter) => adapter.runSearch(query, callbacks, options),
       callbacks
     );
   }

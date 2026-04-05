@@ -1,4 +1,8 @@
-import type { BrowserTaskCallbacks, BrowserTaskExecutor } from "./adapter.js";
+import type {
+  BrowserTaskCallbacks,
+  BrowserTaskExecutor,
+  BrowserTaskRunOptions,
+} from "./adapter.js";
 import {
   dynamicImportModule,
   extractFirstUrl,
@@ -11,7 +15,11 @@ const SEARCH_TIMEOUT_MS = 45_000;
 export class PuppeteerAdapter implements BrowserTaskExecutor {
   private cancelRequested = false;
 
-  async runSearch(query: string, callbacks: BrowserTaskCallbacks): Promise<string> {
+  async runSearch(
+    query: string,
+    callbacks: BrowserTaskCallbacks,
+    _options?: BrowserTaskRunOptions
+  ): Promise<string> {
     callbacks.onStatus("Launching Puppeteer...");
     const puppeteer = await loadPuppeteer();
     const browser = await puppeteer.launch({ headless: true });
@@ -28,7 +36,7 @@ export class PuppeteerAdapter implements BrowserTaskExecutor {
       await page.waitForTimeout(1_000);
 
       const results = (await page.evaluate(() => {
-        const doc = (globalThis as { document?: { querySelectorAll: (s: string) => unknown[] } })
+        const doc = (globalThis as unknown as { document?: { querySelectorAll: (s: string) => unknown[] } })
           .document;
         if (!doc) {
           return [];
@@ -79,7 +87,8 @@ export class PuppeteerAdapter implements BrowserTaskExecutor {
 
   async runFormFillDraft(
     query: string,
-    callbacks: BrowserTaskCallbacks
+    callbacks: BrowserTaskCallbacks,
+    _options?: BrowserTaskRunOptions
   ): Promise<string> {
     const url = extractFirstUrl(query);
     if (!url) {
@@ -100,7 +109,7 @@ export class PuppeteerAdapter implements BrowserTaskExecutor {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: SEARCH_TIMEOUT_MS });
 
       const filledFields = (await page.evaluate(() => {
-        const doc = (globalThis as { document?: { querySelectorAll: (s: string) => unknown[] } })
+        const doc = (globalThis as unknown as { document?: { querySelectorAll: (s: string) => unknown[] } })
           .document;
         if (!doc) {
           return [];

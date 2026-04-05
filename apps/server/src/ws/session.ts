@@ -13,7 +13,11 @@ import type {
   SessionConnectionContext,
   SessionStatus,
 } from "../modules/session/session-types.js";
-import { handleTranscriptFinal } from "../orchestrator/orchestrator.js";
+import {
+  handleTranscriptFinal,
+  createEmptyHistory,
+  type ConversationHistory,
+} from "../orchestrator/orchestrator.js";
 import { BrowserAdapter } from "../tools/browser/adapter.js";
 import { SttAdapter } from "../voice/stt.js";
 
@@ -51,6 +55,7 @@ export class Session {
   private hasFinalizedRun = false;
   private narrationSequence = 0;
   private browserAdapter: BrowserAdapter | null = null;
+  private conversationHistory: ConversationHistory = createEmptyHistory();
   private browserProfileId: string | null = null;
   private browserUseApiKeyOverride: string | null = null;
   private hasEnded = false;
@@ -141,7 +146,11 @@ export class Session {
         void this.onAudioChunk(event.data);
         break;
       case "audio_end":
-        void this.onAudioEnd();
+        this.onAudioEnd().catch((err) => {
+          console.error(`[session:${this.id}] onAudioEnd error:`, err);
+          this.setState("idle");
+          this.send({ type: "error", message: "Failed to process audio" });
+        });
         break;
       case "interrupt":
         this.onInterrupt();
@@ -209,20 +218,26 @@ export class Session {
     }
 
     const transcript = this.accumulatedTranscript.trim();
-    console.log(`[session:${this.id}] Transcript: "${transcript}" (state: ${this.state})`);
+    console.log(`[session:${this.id}] Transcript (${transcript.length} chars): "${transcript}" (state: ${this.state})`);
+    if (!transcript) {
+      console.warn(`[session:${this.id}] Empty transcript — STT may not have flushed in time`);
+    }
     if (transcript) {
       await handleTranscriptFinal(
         this,
         this.ai,
         env.ELEVEN_LABS_API_KEY,
         transcript,
+        this.conversationHistory,
         env.NAVIGATION_ALLOWLIST,
         {
+          browserApiKey: this.browserUseApiKeyOverride ?? env.BROWSER_USE_API_KEY,
+          browserApiKeySource: this.browserUseApiKeyOverride ? "user" : "server",
           createBrowserAdapter: () =>
             new BrowserAdapter(
               this.browserUseApiKeyOverride ?? env.BROWSER_USE_API_KEY,
               {
-              profileId: this.browserProfileId,
+                profileId: this.browserProfileId ?? env.BROWSER_USE_PROFILE_ID ?? null,
               }
             ),
         }
@@ -244,6 +259,7 @@ export class Session {
       this.browserAdapter = null;
     }
 
+    this.conversationHistory = createEmptyHistory();
     this.finishSession("interrupted");
     this.endSession("interrupted");
     this.setState("idle");

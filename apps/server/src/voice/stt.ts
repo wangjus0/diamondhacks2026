@@ -125,7 +125,8 @@ export class SttAdapter {
 
   /**
    * Signal end-of-audio and wait for the final transcript before closing.
-   * Returns a promise that resolves once the WebSocket is fully closed.
+   * Does NOT close immediately — waits for ElevenLabs to flush its VAD buffer
+   * and emit the final transcript, then closes.
    */
   closeGracefully(): Promise<void> {
     return new Promise((resolve) => {
@@ -137,20 +138,50 @@ export class SttAdapter {
 
       this.closingByClient = true;
 
-      // Give ElevenLabs time to flush the final transcript before closing
-      const timeout = setTimeout(() => {
+      const closeAndResolve = () => {
+        clearTimeout(finalWaitTimeout);
+        clearTimeout(hardTimeout);
         if (this.ws?.readyState === WebSocket.OPEN) {
           this.ws.close(1000, "client_closed");
         }
-        resolve();
-      }, 1500);
+        // Wait for the close handshake to complete
+        if (this.ws) {
+          this.ws.once("close", () => resolve());
+          // Safety net in case the close event never fires
+          setTimeout(resolve, 500);
+        } else {
+          resolve();
+        }
+      };
 
-      this.ws.on("close", () => {
-        clearTimeout(timeout);
+      // Intercept onFinal so we can detect when the transcript arrives
+      const originalOnFinal = this.callbacks.onFinal;
+      this.callbacks.onFinal = (text: string) => {
+        this.callbacks.onFinal = originalOnFinal;
+        originalOnFinal(text);
+        // Give a tiny grace window for any follow-up messages, then close
+        setTimeout(closeAndResolve, 80);
+      };
+
+      // If no final transcript arrives within 2s, force-close anyway
+      const finalWaitTimeout = setTimeout(() => {
+        console.warn("[STT] No final transcript received within timeout, force-closing");
+        this.callbacks.onFinal = originalOnFinal;
+        closeAndResolve();
+      }, 2000);
+
+      // Absolute hard cap
+      const hardTimeout = setTimeout(() => {
+        this.callbacks.onFinal = originalOnFinal;
+        resolve();
+      }, 3000);
+
+      this.ws.once("close", () => {
+        clearTimeout(finalWaitTimeout);
+        clearTimeout(hardTimeout);
+        this.callbacks.onFinal = originalOnFinal;
         resolve();
       });
-
-      this.ws.close(1000, "client_closed");
     });
   }
 

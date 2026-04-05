@@ -417,6 +417,20 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
   const [browserUseApiKey, setBrowserUseApiKey] = useState("");
   const [isRunningAutomaticSync, setIsRunningAutomaticSync] = useState(false);
 
+  const handleBrowserUseApiKeyChange = (value: string) => {
+    setBrowserUseApiKey(value);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      void persistBrowserUseApiKey(null);
+      return;
+    }
+
+    const normalized = normalizeBrowserUseApiKey(value);
+    if (normalized) {
+      void persistBrowserUseApiKey(normalized);
+    }
+  };
+
   const setMicrophoneAccess = (value: MicrophoneAccessStatus) => {
     setFormData((previous) => ({
       ...previous,
@@ -729,6 +743,7 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
     await persistBrowserProfileId(
       normalizeBrowserProfileId(formData.permissions.browserProfileId)
     );
+    await persistBrowserUseApiKey(normalizeBrowserUseApiKey(browserUseApiKey));
   };
 
   const applyValidationForCurrentStep = (): boolean => {
@@ -892,7 +907,7 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
                 }}
                 browserUseApiKey={browserUseApiKey}
                 onBrowserUseApiKeyChange={(value) => {
-                  setBrowserUseApiKey(value);
+                  handleBrowserUseApiKeyChange(value);
                 }}
                 onStartAutomaticBrowserProfileSync={startAutomaticBrowserProfileSync}
                 runningAutomaticSync={isRunningAutomaticSync}
