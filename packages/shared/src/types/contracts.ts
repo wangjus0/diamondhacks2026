@@ -6,7 +6,7 @@ export type TurnState =
   | "speaking"
   | "error";
 
-export type IntentName = "search" | "form_fill_draft" | "clarify";
+export type IntentName = "search" | "form_fill_draft" | "clarify" | "web_extract" | "multi_site_compare";
 
 export type ActionOutcome =
   | "queued"

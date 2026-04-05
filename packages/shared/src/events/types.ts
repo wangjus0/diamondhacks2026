@@ -3,7 +3,7 @@ export type TurnState = "idle" | "listening" | "thinking" | "acting" | "speaking
 
 // ── Intent result ───────────────────────────────────────────
 export interface IntentResult {
-  intent: "search" | "form_fill_draft" | "clarify";
+  intent: "search" | "form_fill_draft" | "clarify" | "web_extract" | "multi_site_compare";
   confidence: number;
   query: string;
   clarification?: string;

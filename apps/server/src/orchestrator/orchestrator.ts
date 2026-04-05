@@ -9,6 +9,10 @@ import {
   logPolicyBlock,
 } from "../safety/policy.js";
 import { classifyIntent } from "./intent.js";
+import { runTool } from "../tools/core/tool-runner.js";
+import { ToolPolicyBlockedError } from "../tools/core/tool-errors.js";
+import "../tools/browser/web-extract.js";
+import "../tools/browser/multi-site-compare.js";
 
 interface Orchestratable {
   send(event: ServerEvent): void;
@@ -123,28 +127,57 @@ export async function handleTranscriptFinal(
     }
 
     session.setState("acting");
-    const browser = deps.createBrowserAdapter(deps.browserApiKey);
-    session.setBrowserAdapter(browser);
 
     const statusCb = {
       onStatus: (msg: string) => session.send({ type: "action_status", message: msg }),
     };
 
     let output: string;
-    try {
-      if (result.intent === "search") {
-        output = await browser.runSearch(result.query, statusCb);
-      } else {
-        output = await browser.runFormFillDraft(result.query, statusCb, {
-          allowSubmit: env.ALLOW_FINAL_FORM_SUBMISSION,
-        });
-      }
-    } catch (err) {
-      console.error("[Orchestrator] Browser error:", err);
-      output = "Browser task failed. " + (err instanceof Error ? err.message : "");
-    }
 
-    session.setBrowserAdapter(null);
+    if (result.intent === "web_extract" || result.intent === "multi_site_compare") {
+      try {
+        const toolResult = await runTool(
+          result.intent,
+          {
+            query: result.query,
+            browserApiKey: deps.browserApiKey,
+            onStatus: statusCb.onStatus,
+          },
+          createPolicyConfig(navigationAllowlist, env.ALLOW_FINAL_FORM_SUBMISSION)
+        );
+        output = toolResult.output;
+      } catch (err) {
+        if (err instanceof ToolPolicyBlockedError) {
+          logPolicyBlock({ reason: "dangerous_action", intent: result.intent, query: result.query });
+          session.send({ type: "action_status", message: err.userMessage });
+          session.setState("speaking");
+          await deps.narrate(session, err.userMessage, apiKey);
+          session.setState("idle");
+          session.send({ type: "done" });
+          return;
+        }
+        console.error("[Orchestrator] Tool error:", err);
+        output = "Tool task failed. " + (err instanceof Error ? err.message : "");
+      }
+    } else {
+      const browser = deps.createBrowserAdapter(deps.browserApiKey);
+      session.setBrowserAdapter(browser);
+
+      try {
+        if (result.intent === "search") {
+          output = await browser.runSearch(result.query, statusCb);
+        } else {
+          output = await browser.runFormFillDraft(result.query, statusCb, {
+            allowSubmit: env.ALLOW_FINAL_FORM_SUBMISSION,
+          });
+        }
+      } catch (err) {
+        console.error("[Orchestrator] Browser error:", err);
+        output = "Browser task failed. " + (err instanceof Error ? err.message : "");
+      }
+
+      session.setBrowserAdapter(null);
+    }
     session.setState("speaking");
     await deps.narrate(session, output, apiKey);
 

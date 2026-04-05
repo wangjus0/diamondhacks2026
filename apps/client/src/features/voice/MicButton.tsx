@@ -17,6 +17,7 @@ export function MicButton({
 }: MicButtonProps) {
   const { startRecording, stopRecording, isRecording } = useMicrophone({
     onAudioChunk,
+    onStart: onStartSession,
     onStop,
     onError,
   });
@@ -27,7 +28,6 @@ export function MicButton({
       return;
     }
 
-    onStartSession();
     const started = await startRecording();
     if (started) {
       return;

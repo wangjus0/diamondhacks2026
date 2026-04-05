@@ -11,6 +11,7 @@ export class SttAdapter {
   private ws: WebSocket | null = null;
   private apiKey: string;
   private callbacks: SttCallbacks;
+  private closingByClient = false;
 
   constructor(apiKey: string, callbacks: SttCallbacks) {
     this.apiKey = apiKey;
@@ -28,6 +29,7 @@ export class SttAdapter {
       this.ws = new WebSocket(url.toString(), {
         headers: { "xi-api-key": this.apiKey },
       });
+      this.closingByClient = false;
 
       this.ws.on("open", () => {
         console.log("[STT] Connected to ElevenLabs");
@@ -42,6 +44,7 @@ export class SttAdapter {
             text?: string;
             reason?: string;
             error?: string;
+            message?: string;
           };
           const eventType = msg.message_type ?? msg.type;
 
@@ -51,18 +54,27 @@ export class SttAdapter {
           }
 
           if (
-            (eventType === "committed_transcript" ||
-              eventType === "committed_transcript_with_timestamps" ||
-              eventType === "final_transcript") &&
+            (eventType === "final_transcript" ||
+              eventType === "committed_transcript" ||
+              eventType === "committed_transcript_with_timestamps") &&
             msg.text?.trim()
           ) {
             this.callbacks.onFinal(msg.text);
             return;
           }
 
-          if (eventType?.includes("error")) {
-            const reason = msg.reason || msg.error || "Unknown STT error";
-            this.callbacks.onError(reason);
+          if (
+            eventType?.includes("error") ||
+            eventType === "input_error" ||
+            eventType === "auth_error" ||
+            eventType === "rate_limited"
+          ) {
+            const errorMessage =
+              msg.reason ||
+              msg.error ||
+              msg.message ||
+              "Speech recognition request was rejected.";
+            this.callbacks.onError(errorMessage);
           }
         } catch (err) {
           console.error("[STT] Failed to parse message:", err);
@@ -78,9 +90,11 @@ export class SttAdapter {
       this.ws.on("close", (code, reasonBuffer) => {
         const reasonText = reasonBuffer.toString() || "no reason provided";
         console.log(`[STT] Connection closed (code=${code}, reason=${reasonText})`);
-        if (code !== 1000 && code !== 1001) {
-          this.callbacks.onError(reasonText);
+
+        if (!this.closingByClient && code !== 1000 && code !== 1001) {
+          this.callbacks.onError(`Speech recognition disconnected (${code}: ${reasonText}).`);
         }
+
         this.ws = null;
       });
     });
@@ -100,8 +114,11 @@ export class SttAdapter {
 
   close(): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      this.closingByClient = true;
       this.ws.close(1000, "client_closed");
+      return;
     }
+
     this.ws = null;
   }
 }

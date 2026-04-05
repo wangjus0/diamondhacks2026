@@ -23,6 +23,7 @@ export function VoicePopover() {
 
   const { startRecording, stopRecording, isRecording } = useMicrophone({
     onAudioChunk: sendAudioChunk,
+    onStart: sendStartSession,
     onStop: sendAudioEnd,
     onError: setError,
     onAudioLevel: (level) => {
@@ -62,7 +63,6 @@ export function VoicePopover() {
     }
 
     setError(null);
-    sendStartSession();
     const started = await startRecording();
     if (started) {
       return;

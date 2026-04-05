@@ -40,18 +40,18 @@ export function App() {
     <div className="screen app-screen">
       <div className="app-frame">
         <aside className="app-rail" aria-label="Primary navigation">
-          <div className="rail-logo" aria-hidden="true">MU</div>
-          <button className="rail-item rail-item-active" aria-label="Home" type="button">H</button>
-          <button className="rail-item" aria-label="Timeline" type="button">T</button>
-          <button className="rail-item" aria-label="Actions" type="button">A</button>
-          <button className="rail-item" aria-label="Settings" type="button">S</button>
+          <div className="rail-logo" aria-hidden="true">Murmur</div>
+          <button className="rail-item rail-item-active" aria-label="Home" type="button">Home</button>
+          <button className="rail-item" aria-label="Timeline" type="button">Timeline</button>
+          <button className="rail-item" aria-label="Actions" type="button">Actions</button>
+          <button className="rail-item" aria-label="Settings" type="button">Settings</button>
         </aside>
 
         <div className="app-workspace">
           <header className="app-topbar">
             <div className="app-title-group">
               <p className="app-titlebar-label">Murmur</p>
-              <p className="app-titlebar-subtitle">Voice ops dashboard</p>
+              <p className="app-titlebar-subtitle">Voice assistant workspace</p>
             </div>
 
             <div className="search-wrap" role="search">
@@ -81,10 +81,9 @@ export function App() {
 
           <div className="app-dashboard">
             <section className="panel stack-panel hero-card">
-              <p className="eyebrow">Voice Operations Console</p>
-              <h1 className="app-title">Murmur Voice Agent</h1>
+              <h1 className="app-title">Session Controls</h1>
               <p className="subtitle">
-                Speak naturally and the assistant transcribes, reasons, and executes browser actions in real time.
+                Start recording, monitor turn state, and interrupt the assistant when needed.
               </p>
 
               <div className="utility-grid">
@@ -145,7 +144,7 @@ export function App() {
 
             <section className="panel stack-panel utility-card">
               <h4 className="panel-heading">Session Status</h4>
-              <p className="status-note">Realtime assistant session</p>
+              <p className="status-note">Current state and queue details</p>
               <div className="utility-grid">
                 <div className="utility-metric">
                   <span className="utility-label">Turn State</span>

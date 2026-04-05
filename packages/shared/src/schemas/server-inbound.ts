@@ -17,7 +17,7 @@ const turnStateSchema = z.enum([
   "error",
 ]);
 
-const intentNameSchema = z.enum(["search", "form_fill_draft", "clarify"]);
+const intentNameSchema = z.enum(["search", "form_fill_draft", "clarify", "web_extract", "multi_site_compare"]);
 
 const actionOutcomeSchema = z.enum([
   "queued",
