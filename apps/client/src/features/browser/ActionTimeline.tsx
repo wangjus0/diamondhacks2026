@@ -39,8 +39,12 @@ export function ActionTimeline() {
         <p className="timeline-empty">Waiting for session activity...</p>
       )}
 
-      {actionTimeline.map((item) => (
-        <div key={item.id} className="timeline-item">
+      {actionTimeline.map((item, index) => (
+        <div
+          key={item.id}
+          className="timeline-item"
+          style={{ ["--item-index" as string]: index }}
+        >
           <div className="timeline-meta">
             <span className={`timeline-kind ${KIND_CLASSNAMES[item.kind]}`}>
               {KIND_LABELS[item.kind]}

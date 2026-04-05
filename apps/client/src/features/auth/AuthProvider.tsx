@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient } from "../../lib/supabase";
 import { parseOAuthCallback } from "./oauth";
@@ -21,6 +21,7 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const GOOGLE_OAUTH_CALLBACK_TTL_MS = 5 * 60 * 1000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const activeGoogleOAuthStartAtRef = useRef<number | null>(null);
 
   const clearAuthError = useCallback(() => {
     setAuthError(null);
@@ -37,6 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (rawMessage: string) => {
       if (isRedirectConfigurationError(rawMessage)) {
         return buildRedirectConfigurationError(authRedirectUrl);
+      }
+
+      if (/(access_denied|consent denied|user denied)/i.test(rawMessage)) {
+        return "Google sign-in was canceled.";
       }
 
       if (/(provider|oauth).*(disabled|not enabled|not configured|unsupported)/i.test(rawMessage)) {
@@ -52,6 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [authRedirectUrl],
   );
 
+  const beginGoogleOAuthFlow = useCallback(() => {
+    activeGoogleOAuthStartAtRef.current = Date.now();
+  }, []);
+
+  const clearGoogleOAuthFlow = useCallback(() => {
+    activeGoogleOAuthStartAtRef.current = null;
+  }, []);
+
+  const consumeGoogleOAuthFlowIfActive = useCallback(() => {
+    const startedAt = activeGoogleOAuthStartAtRef.current;
+    activeGoogleOAuthStartAtRef.current = null;
+
+    if (startedAt === null) {
+      return false;
+    }
+
+    return Date.now() - startedAt <= GOOGLE_OAUTH_CALLBACK_TTL_MS;
+  }, []);
+
   const applyOAuthCallback = useCallback(
     async (callbackUrl: string) => {
       const parsed = parseOAuthCallback(callbackUrl);
@@ -60,11 +85,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (parsed.type === "error") {
+        clearGoogleOAuthFlow();
         setAuthError(resolveOAuthErrorMessage(parsed.message));
         return;
       }
 
       if (parsed.type === "session") {
+        const isFromActiveGoogleFlow = consumeGoogleOAuthFlowIfActive();
+        if (!isFromActiveGoogleFlow) {
+          setAuthError("Unexpected OAuth callback. Start Google sign-in from the app and try again.");
+          return;
+        }
+
         const { data, error } = await supabase.auth.setSession({
           access_token: parsed.accessToken,
           refresh_token: parsed.refreshToken,
@@ -92,6 +124,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const isFromActiveGoogleFlow = consumeGoogleOAuthFlowIfActive();
+      if (!isFromActiveGoogleFlow) {
+        setAuthError("Unexpected OAuth callback. Start Google sign-in from the app and try again.");
+        return;
+      }
+
       const { data, error } = await supabase.auth.exchangeCodeForSession(parsed.code);
       if (error) {
         setAuthError(resolveOAuthErrorMessage(error.message));
@@ -100,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user ?? null);
       }
     },
-    [resolveOAuthErrorMessage, supabase],
+    [clearGoogleOAuthFlow, consumeGoogleOAuthFlowIfActive, resolveOAuthErrorMessage, supabase],
   );
 
   useEffect(() => {
@@ -217,6 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setAuthError(null);
+    beginGoogleOAuthFlow();
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -226,11 +266,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
+      clearGoogleOAuthFlow();
       setAuthError(resolveOAuthErrorMessage(error.message));
       return;
     }
 
     if (!data.url) {
+      clearGoogleOAuthFlow();
       setAuthError("Missing Google OAuth URL from Supabase.");
       return;
     }
@@ -238,10 +280,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.startGoogleOAuth(data.url);
     } catch (error) {
+      clearGoogleOAuthFlow();
       const message = error instanceof Error ? error.message : "Failed to open Google OAuth flow.";
       setAuthError(resolveOAuthErrorMessage(message));
     }
-  }, [authRedirectUrl, resolveOAuthErrorMessage, supabase]);
+  }, [authRedirectUrl, beginGoogleOAuthFlow, clearGoogleOAuthFlow, resolveOAuthErrorMessage, supabase]);
 
   const signOut = useCallback(async () => {
     setAuthError(null);

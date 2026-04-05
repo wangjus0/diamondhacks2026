@@ -16,12 +16,16 @@ export function TranscriptPanel() {
     <div className="panel stack-panel scroll-panel transcript-panel">
       <h3 className="panel-heading">Transcript</h3>
       {transcriptFinals.map((text, i) => (
-        <p key={i}>
+        <p
+          key={i}
+          className="transcript-line"
+          style={{ ["--item-index" as string]: i }}
+        >
           {text}
         </p>
       ))}
       {transcriptPartial && (
-        <p className="transcript-partial">
+        <p className="transcript-partial transcript-line transcript-line-partial">
           {transcriptPartial}
         </p>
       )}

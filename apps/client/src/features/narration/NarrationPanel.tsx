@@ -10,7 +10,7 @@ export function NarrationPanel({ isPlaying }: NarrationPanelProps) {
   if (!narrationText) return null;
 
   return (
-    <div className="panel stack-panel narration-panel">
+    <div className="panel stack-panel narration-panel narration-panel-live">
       <div className="narration-header">
         <h3 className="panel-heading">Narration</h3>
         {isPlaying && (

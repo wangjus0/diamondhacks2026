@@ -129,7 +129,13 @@ export function App() {
                 <h4 className="panel-heading">Browser Actions</h4>
                 <div className="event-list">
                   {actionStatuses.map((msg, i) => (
-                    <div key={i} className="event-item">{msg}</div>
+                    <div
+                      key={i}
+                      className="event-item event-item-animated"
+                      style={{ ["--item-index" as string]: i }}
+                    >
+                      {msg}
+                    </div>
                   ))}
                 </div>
               </div>
