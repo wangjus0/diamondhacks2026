@@ -13,6 +13,7 @@ function createPersistenceMock(): Pick<SessionPersistence, "listSessions" | "get
       return [
         {
           sessionId: "session-1",
+          userId: "11111111-1111-4111-8111-111111111111",
           startedAt: "2026-04-04T20:00:00.000Z",
           endedAt: null,
           status: "active",
@@ -30,6 +31,7 @@ function createPersistenceMock(): Pick<SessionPersistence, "listSessions" | "get
       return {
         session: {
           sessionId: "session-1",
+          userId: "11111111-1111-4111-8111-111111111111",
           startedAt: "2026-04-04T20:00:00.000Z",
           endedAt: "2026-04-04T20:03:00.000Z",
           status: "completed",
@@ -115,6 +117,7 @@ test("GET /api/sessions returns sessions with requested limit", async () => {
     sessions: [
       {
         sessionId: "session-1",
+        userId: "11111111-1111-4111-8111-111111111111",
         startedAt: "2026-04-04T20:00:00.000Z",
         endedAt: null,
         status: "active",

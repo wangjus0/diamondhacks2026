@@ -22,6 +22,7 @@ const StartSessionIntegrationAuthSchema = z.object({
 export const ClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("start_session"),
+    userId: z.string().uuid().optional(),
     profileId: z.string().uuid().optional(),
     browserUseApiKey: z.string().min(1).optional(),
     integrationAuth: z.record(StartSessionIntegrationAuthSchema).optional(),

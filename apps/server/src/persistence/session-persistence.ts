@@ -6,6 +6,7 @@ export type SessionTerminalStatus =
 
 export interface StartSessionInput {
   sessionId: string;
+  userId?: string;
   startedAt?: string;
 }
 
@@ -39,6 +40,7 @@ export interface FinishSessionInput {
 
 export interface SessionRunRecord {
   sessionId: string;
+  userId: string | null;
   startedAt: string;
   endedAt: string | null;
   status: string;

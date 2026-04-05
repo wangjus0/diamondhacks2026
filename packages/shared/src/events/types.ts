@@ -18,6 +18,7 @@ export interface IntegrationSessionAuth {
 // ── Client → Server events ─────────────────────────────────
 export interface StartSessionEvent {
   type: "start_session";
+  userId?: string;
   profileId?: string;
   browserUseApiKey?: string;
   integrationAuth?: Record<string, IntegrationSessionAuth>;

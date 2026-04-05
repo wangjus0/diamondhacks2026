@@ -1,5 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
+import { parseServerEvent, type ServerEvent } from "@murmur/shared";
 import { createSocket, type Socket } from "../lib/ws";
+import { getStoredAuthUserId } from "../lib/auth-user";
 import {
   hydrateBrowserProfileIdFromDesktop,
   hydrateBrowserUseApiKeyFromDesktop,
@@ -10,11 +12,119 @@ import { useSessionStore } from "../store/session";
 import type { useAudioPlayer } from "../features/narration/useAudioPlayer";
 import { resolveSessionSocketUrl } from "./sessionSocketUrl";
 
+const SHARED_SESSION_EVENT_STORAGE_KEY = "murmur.sharedSessionEvent";
+
+function shouldShareSessionEvent(event: ServerEvent): boolean {
+  return (
+    event.type === "session_started" ||
+    event.type === "state" ||
+    event.type === "transcript_final" ||
+    event.type === "action_status" ||
+    event.type === "narration_text" ||
+    event.type === "done" ||
+    event.type === "error"
+  );
+}
+
 export function useSession(
-  audioPlayer: ReturnType<typeof useAudioPlayer>
+  audioPlayer: ReturnType<typeof useAudioPlayer>,
+  userId: string | null = null,
 ) {
   const socketRef = useRef<Socket | null>(null);
+  const windowIdRef = useRef(`window-${crypto.randomUUID()}`);
+  const audioPlayerRef = useRef(audioPlayer);
   const store = useSessionStore;
+
+  const applyServerEvent = useCallback((event: ServerEvent, broadcastToOtherWindows: boolean) => {
+    switch (event.type) {
+      case "session_started":
+        store.getState().clearActionTimeline();
+        store.getState().clearConversationHistory();
+        store.getState().setSessionId(event.sessionId);
+        store.getState().setConnected(true);
+        store.getState().addActionTimelineItem({
+          kind: "session",
+          message: `Session started (${event.sessionId})`,
+        });
+        break;
+      case "state":
+        store.getState().setTurnState(event.state);
+        store.getState().addActionTimelineItem({
+          kind: "state",
+          message: `State changed to ${event.state}`,
+        });
+        break;
+      case "transcript_partial":
+        store.getState().setTranscriptPartial(event.text);
+        break;
+      case "transcript_final":
+        store.getState().setTranscriptPartial("");
+        store.getState().addTranscriptFinal(event.text);
+        store.getState().addConversationQuestion(event.text);
+        break;
+      case "intent":
+        store.getState().setIntent(event.intent);
+        store.getState().addActionTimelineItem({
+          kind: "intent",
+          message: `Intent detected: ${event.intent.intent} (${Math.round(event.intent.confidence * 100)}%)`,
+        });
+        break;
+      case "action_status":
+        store.getState().addActionTimelineItem({
+          kind: "action",
+          message: event.message,
+        });
+        store.getState().addActionStatus(event.message);
+        break;
+      case "narration_text":
+        store.getState().setNarrationText(event.text);
+        store.getState().setLatestConversationAnswer(event.text);
+        store.getState().addActionTimelineItem({
+          kind: "narration",
+          message: event.text,
+        });
+        break;
+      case "narration_audio":
+        audioPlayerRef.current.enqueue(event.audio);
+        break;
+      case "done":
+        store.getState().setTurnState("idle");
+        store.getState().clearActionStatuses();
+        store.getState().addActionTimelineItem({
+          kind: "done",
+          message: "Turn completed",
+        });
+        break;
+      case "error":
+        store.getState().setError(event.message);
+        store.getState().addActionTimelineItem({
+          kind: "error",
+          message: event.message,
+        });
+        break;
+    }
+
+    if (!broadcastToOtherWindows || !shouldShareSessionEvent(event)) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        SHARED_SESSION_EVENT_STORAGE_KEY,
+        JSON.stringify({
+          source: windowIdRef.current,
+          emittedAt: Date.now(),
+          event,
+        }),
+      );
+    } catch {
+      // no-op in restricted runtimes
+    }
+  }, []);
+
+  useEffect(() => {
+    audioPlayerRef.current = audioPlayer;
+  }, [audioPlayer]);
 
   useEffect(() => {
     void Promise.all([
@@ -32,79 +142,36 @@ export function useSession(
     socketRef.current = socket;
 
     socket.onEvent((event) => {
-      switch (event.type) {
-        case "session_started":
-          store.getState().clearActionTimeline();
-          store.getState().clearConversationHistory();
-          store.getState().setSessionId(event.sessionId);
-          store.getState().setConnected(true);
-          store.getState().addActionTimelineItem({
-            kind: "session",
-            message: `Session started (${event.sessionId})`,
-          });
-          break;
-        case "state":
-          store.getState().setTurnState(event.state);
-          store.getState().addActionTimelineItem({
-            kind: "state",
-            message: `State changed to ${event.state}`,
-          });
-          break;
-        case "transcript_partial":
-          store.getState().setTranscriptPartial(event.text);
-          break;
-        case "transcript_final":
-          store.getState().setTranscriptPartial("");
-          store.getState().addTranscriptFinal(event.text);
-          store.getState().addConversationQuestion(event.text);
-          break;
-        case "intent":
-          store.getState().setIntent(event.intent);
-          store.getState().addActionTimelineItem({
-            kind: "intent",
-            message: `Intent detected: ${event.intent.intent} (${Math.round(event.intent.confidence * 100)}%)`,
-          });
-          break;
-        case "action_status":
-          store.getState().addActionTimelineItem({
-            kind: "action",
-            message: event.message,
-          });
-          store.getState().addActionStatus(event.message);
-          break;
-        case "narration_text":
-          store.getState().setNarrationText(event.text);
-          store.getState().setLatestConversationAnswer(event.text);
-          store.getState().addActionTimelineItem({
-            kind: "narration",
-            message: event.text,
-          });
-          break;
-        case "narration_audio":
-          audioPlayer.enqueue(event.audio);
-          break;
-        case "done":
-          store.getState().setTurnState("idle");
-          store.getState().clearActionStatuses();
-          store.getState().addActionTimelineItem({
-            kind: "done",
-            message: "Turn completed",
-          });
-          break;
-        case "error":
-          store.getState().setError(event.message);
-          store.getState().addActionTimelineItem({
-            kind: "error",
-            message: event.message,
-          });
-          break;
-      }
+      applyServerEvent(event, true);
     });
 
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== SHARED_SESSION_EVENT_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(event.newValue) as {
+          source?: unknown;
+          event?: unknown;
+        };
+        if (payload.source === windowIdRef.current) {
+          return;
+        }
+
+        const parsed = parseServerEvent(payload.event);
+        applyServerEvent(parsed, false);
+      } catch {
+        // ignore malformed cross-window event payloads
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
     return () => {
+      window.removeEventListener("storage", handleStorage);
       socket.close();
     };
-  }, []);
+  }, [applyServerEvent]);
 
   const sendStartSession = useCallback(() => {
     void (async () => {
@@ -115,13 +182,15 @@ export function useSession(
 
       const profileId = getStoredBrowserProfileId();
       const browserUseApiKey = getStoredBrowserUseApiKey();
+      const effectiveUserId = userId ?? getStoredAuthUserId();
       socketRef.current?.send({
         type: "start_session",
+        ...(effectiveUserId ? { userId: effectiveUserId } : {}),
         ...(profileId ? { profileId } : {}),
         ...(browserUseApiKey ? { browserUseApiKey } : {}),
       });
     })();
-  }, []);
+  }, [userId]);
 
   const sendAudioChunk = useCallback((data: string) => {
     socketRef.current?.send({ type: "audio_chunk", data });

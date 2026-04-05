@@ -54,6 +54,7 @@ export class Session {
   private hasFinalizedRun = false;
   private narrationSequence = 0;
   private browserAdapter: BrowserAdapter | null = null;
+  private userId: string | null = null;
   private browserProfileId: string | null = null;
   private browserUseApiKeyOverride: string | null = null;
   private integrationAuthOverride: StartSessionIntegrationAuth = {};
@@ -139,7 +140,12 @@ export class Session {
 
     switch (event.type) {
       case "start_session":
-        this.onStartSession(event.profileId, event.browserUseApiKey, event.integrationAuth);
+        this.onStartSession(
+          event.userId,
+          event.profileId,
+          event.browserUseApiKey,
+          event.integrationAuth
+        );
         break;
       case "audio_chunk":
         void this.onAudioChunk(event.data);
@@ -154,6 +160,7 @@ export class Session {
   }
 
   private onStartSession(
+    userId?: string,
     profileId?: string,
     browserUseApiKey?: string,
     integrationAuth?: StartSessionIntegrationAuth
@@ -162,12 +169,16 @@ export class Session {
     this.audioChunkCount = 0;
     this.hasFinalizedRun = false;
     this.narrationSequence = 0;
+    this.userId = normalizeUserId(userId);
     this.browserProfileId = normalizeProfileId(profileId);
     this.browserUseApiKeyOverride = normalizeBrowserUseApiKey(browserUseApiKey);
     this.integrationAuthOverride = normalizeIntegrationAuth(integrationAuth);
 
     this.persistNonBlocking(
-      this.persistence.startSession({ sessionId: this.id }),
+      this.persistence.startSession({
+        sessionId: this.id,
+        ...(this.userId ? { userId: this.userId } : {}),
+      }),
       "start session"
     );
     this.memoryPersistence?.startSession(this.id, this.connection);
@@ -225,6 +236,7 @@ export class Session {
         this.ai,
         env.ELEVEN_LABS_API_KEY,
         transcript,
+        undefined,
         env.NAVIGATION_ALLOWLIST,
         {
           createBrowserAdapter: () =>
@@ -378,6 +390,21 @@ function isSupabaseMissingTableError(error: unknown): boolean {
 }
 
 function normalizeProfileId(raw: string | undefined): string | null {
+  if (!raw) {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function normalizeUserId(raw: string | undefined): string | null {
   if (!raw) {
     return null;
   }

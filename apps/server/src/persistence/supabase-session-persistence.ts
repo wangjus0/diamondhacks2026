@@ -40,6 +40,7 @@ export class SupabaseSessionPersistence implements SessionPersistence {
       prefer: "resolution=merge-duplicates,return=minimal",
       body: {
         session_id: input.sessionId,
+        ...(input.userId ? { user_id: input.userId } : {}),
         started_at: startedAt,
         ended_at: null,
         status: "active",
@@ -102,7 +103,7 @@ export class SupabaseSessionPersistence implements SessionPersistence {
     const response = await this.request<SessionRunRow[]>("GET", "session_runs", {
       searchParams: {
         select:
-          "session_id,started_at,ended_at,status,error_message,created_at,updated_at",
+          "session_id,user_id,started_at,ended_at,status,error_message,created_at,updated_at",
         order: "started_at.desc",
         limit: `${limit}`,
       },
@@ -115,7 +116,7 @@ export class SupabaseSessionPersistence implements SessionPersistence {
     const sessionRows = await this.request<SessionRunRow[]>("GET", "session_runs", {
       searchParams: {
         select:
-          "session_id,started_at,ended_at,status,error_message,created_at,updated_at",
+          "session_id,user_id,started_at,ended_at,status,error_message,created_at,updated_at",
         session_id: `eq.${sessionId}`,
         limit: "1",
       },
@@ -205,6 +206,7 @@ export class SupabaseSessionPersistence implements SessionPersistence {
 
 interface SessionRunRow {
   session_id: string;
+  user_id: string | null;
   started_at: string;
   ended_at: string | null;
   status: string;
@@ -240,6 +242,7 @@ interface SessionNarrationRow {
 function mapSessionRunRow(row: SessionRunRow): SessionRunRecord {
   return {
     sessionId: row.session_id,
+    userId: row.user_id ?? null,
     startedAt: row.started_at,
     endedAt: row.ended_at,
     status: row.status,

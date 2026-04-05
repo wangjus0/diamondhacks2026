@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient } from "../../lib/supabase";
+import { setStoredAuthUserId } from "../../lib/auth-user";
 import { parseOAuthCallback } from "./oauth";
 import {
   buildRedirectConfigurationError,
@@ -141,6 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [clearGoogleOAuthFlow, consumeGoogleOAuthFlowIfActive, resolveOAuthErrorMessage, supabase],
   );
+
+  useEffect(() => {
+    setStoredAuthUserId(user?.id ?? null);
+  }, [user]);
 
   useEffect(() => {
     let active = true;

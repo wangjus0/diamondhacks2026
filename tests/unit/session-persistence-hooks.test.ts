@@ -96,7 +96,13 @@ test("session persists start + outgoing events and finalizes on done", async () 
   const { persistence, calls } = createMockPersistence();
   const session = await createSession(ws, persistence);
 
-  ws.emit("message", JSON.stringify({ type: "start_session" }));
+  ws.emit(
+    "message",
+    JSON.stringify({
+      type: "start_session",
+      userId: "ca12bd36-4bb1-4204-869e-fa95df3bf90f",
+    })
+  );
   session.send({ type: "transcript_final", text: "hello world" });
   session.send({ type: "action_status", message: "searching for coffee" });
   session.send({ type: "narration_text", text: "I am searching now." });
@@ -107,6 +113,7 @@ test("session persists start + outgoing events and finalizes on done", async () 
 
   assert.equal(calls.start.length, 1);
   assert.equal(calls.start[0]?.sessionId, session.id);
+  assert.equal(calls.start[0]?.userId, "ca12bd36-4bb1-4204-869e-fa95df3bf90f");
 
   assert.equal(calls.transcript.length, 1);
   assert.equal(calls.transcript[0]?.text, "hello world");

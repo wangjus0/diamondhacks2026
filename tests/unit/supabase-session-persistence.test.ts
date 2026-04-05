@@ -37,6 +37,7 @@ test("startSession upserts an active session run", async () => {
 
   await persistence.startSession({
     sessionId: "session-123",
+    userId: "c45e5dd8-bac7-4dd6-8f51-73ef12a7de31",
     startedAt: "2026-04-04T20:00:00.000Z",
   });
 
@@ -48,6 +49,7 @@ test("startSession upserts an active session run", async () => {
   const payload = JSON.parse(String(calls[0]?.init.body));
   assert.deepEqual(payload, {
     session_id: "session-123",
+    user_id: "c45e5dd8-bac7-4dd6-8f51-73ef12a7de31",
     started_at: "2026-04-04T20:00:00.000Z",
     ended_at: null,
     status: "active",
@@ -102,6 +104,7 @@ test("getSessionReplay returns mapped session with ordered arrays", async () => 
       JSON.stringify([
         {
           session_id: "session-abc",
+          user_id: "7f4d3b06-6d9b-4f2b-964f-89cb376dd24e",
           started_at: "2026-04-04T20:00:00.000Z",
           ended_at: "2026-04-04T20:05:00.000Z",
           status: "completed",
@@ -158,6 +161,7 @@ test("getSessionReplay returns mapped session with ordered arrays", async () => 
 
   assert.ok(replay);
   assert.equal(replay?.session.sessionId, "session-abc");
+  assert.equal(replay?.session.userId, "7f4d3b06-6d9b-4f2b-964f-89cb376dd24e");
   assert.equal(replay?.transcripts[0]?.text, "find coffee near me");
   assert.equal(replay?.actions[0]?.step, "searching");
   assert.equal(replay?.narration[0]?.sequence, 0);

@@ -136,7 +136,7 @@ function AccountStep(props: {
   return (
     <div className="onboarding-fields">
       <label className="field">
-        <span className="field-label">Name</span>
+        <span className="field-label">What should I call you</span>
         <input
           type="text"
           value={props.data.displayName}
@@ -433,96 +433,99 @@ function AudioSetupStep(props: {
     .filter(Boolean);
 
   return (
-    <div className="onboarding-fields">
-      <div className="permission-item permission-item-minimal voice-setup-microphone-block">
-        <div>
-          <h3 className="permission-item-title">Microphone access</h3>
-          <p className="permission-status">Status: {MICROPHONE_STATUS_LABEL[props.permissions.microphoneAccess]}</p>
-          <InlineError id="microphone-access-error" message={props.permissionErrors.microphoneAccess} />
-        </div>
-        <div className="permission-item-actions voice-setup-microphone-actions">
-          <button
-            type="button"
-            className="button button-primary"
-            onClick={() => {
-              void props.onRequestMicrophoneAccess();
-            }}
-          >
-            Allow
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => {
-              void props.onCheckMicrophoneStatus();
-            }}
-            disabled={props.checkingStatus}
-          >
-            {props.checkingStatus ? "Checking..." : "Re-check"}
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => {
-              void props.onOpenMicrophoneSettings();
-            }}
-          >
-            Settings
-          </button>
-        </div>
-      </div>
+    <div className="settings-step-list">
+      <article className="section-card settings-step-card">
+        <h4 className="settings-step-title">Voice</h4>
 
-      <div className="field">
-        <span className="field-label">Audio pill keybind</span>
-        <div className="shortcut-capture-row">
-          <button
-            type="button"
-            className={`button button-danger shortcut-record-button ${isCapturingShortcut ? "shortcut-record-button-active" : ""}`}
-            onClick={handleRecordButtonClick}
-            aria-pressed={isCapturingShortcut}
-            aria-label={isCapturingShortcut ? "Stop recording shortcut" : "Record shortcut"}
-            title={isCapturingShortcut ? "Stop recording shortcut" : "Record shortcut"}
-          >
-            <span className="shortcut-record-symbol" aria-hidden="true">{isCapturingShortcut ? "■" : "●"}</span>
-          </button>
-          <div
-            className={`shortcut-keybind-display ${isCapturingShortcut ? "shortcut-keybind-display-active" : ""}`}
-            aria-invalid={Boolean(props.preferenceErrors.shortcutBehavior)}
-            aria-describedby={shortcutDescribedBy}
-            aria-label={isCapturingShortcut ? "Listening for keybind input" : "Current keybind display"}
-          >
-            {shortcutParts.length > 0 ? (
-              <span className="shortcut-keycaps">
-                {shortcutParts.map((part, index) => (
-                  <span key={`${part}-${index}`} className="shortcut-keycap-group">
-                    {index > 0 && <span className="shortcut-keycap-plus">+</span>}
-                    <kbd className="shortcut-keycap">{part}</kbd>
-                  </span>
-                ))}
-              </span>
-            ) : (
-              <span className="shortcut-keybind-empty">
-                {isCapturingShortcut ? "Press keys..." : "No keybind set"}
-              </span>
-            )}
+        <div className="permission-item permission-item-minimal voice-setup-microphone-block settings-microphone-block">
+          <div>
+            <p className="permission-item-title">Microphone access</p>
+            <p className="permission-status">Status: {MICROPHONE_STATUS_LABEL[props.permissions.microphoneAccess]}</p>
+            <InlineError id="microphone-access-error" message={props.permissionErrors.microphoneAccess} />
           </div>
-          <button
-            type="button"
-            className="button button-secondary shortcut-reset-button"
-            onClick={() => {
-              props.onShortcutBehaviorChange(DEFAULT_SHORTCUT);
-              setIsCapturingShortcut(false);
-            }}
-          >
-            Reset to default
-          </button>
+          <div className="permission-item-actions voice-setup-microphone-actions">
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={() => {
+                void props.onRequestMicrophoneAccess();
+              }}
+            >
+              Allow
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => {
+                void props.onCheckMicrophoneStatus();
+              }}
+              disabled={props.checkingStatus}
+            >
+              {props.checkingStatus ? "Checking..." : "Re-check"}
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => {
+                void props.onOpenMicrophoneSettings();
+              }}
+            >
+              Settings
+            </button>
+          </div>
         </div>
-        <p id="shortcut-behavior-hint" className="field-hint">
-          Press Record to update key combo.
-        </p>
-        <InlineError id="shortcut-behavior-error" message={props.preferenceErrors.shortcutBehavior} />
-      </div>
 
+        <div className="field settings-keybind-field">
+          <span className="field-label">Audio pill keybind</span>
+          <div className="shortcut-capture-row">
+            <button
+              type="button"
+              className={`button button-danger shortcut-record-button ${isCapturingShortcut ? "shortcut-record-button-active" : ""}`}
+              onClick={handleRecordButtonClick}
+              aria-pressed={isCapturingShortcut}
+              aria-label={isCapturingShortcut ? "Stop recording shortcut" : "Record shortcut"}
+              title={isCapturingShortcut ? "Stop recording shortcut" : "Record shortcut"}
+            >
+              <span className="shortcut-record-symbol" aria-hidden="true">{isCapturingShortcut ? "■" : "●"}</span>
+            </button>
+            <div
+              className={`shortcut-keybind-display ${isCapturingShortcut ? "shortcut-keybind-display-active" : ""}`}
+              aria-invalid={Boolean(props.preferenceErrors.shortcutBehavior)}
+              aria-describedby={shortcutDescribedBy}
+              aria-label={isCapturingShortcut ? "Listening for keybind input" : "Current keybind display"}
+            >
+              {shortcutParts.length > 0 ? (
+                <span className="shortcut-keycaps">
+                  {shortcutParts.map((part, index) => (
+                    <span key={`${part}-${index}`} className="shortcut-keycap-group">
+                      {index > 0 && <span className="shortcut-keycap-plus">+</span>}
+                      <kbd className="shortcut-keycap">{part}</kbd>
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="shortcut-keybind-empty">
+                  {isCapturingShortcut ? "Press keys..." : "No keybind set"}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="button button-secondary shortcut-reset-button"
+              onClick={() => {
+                props.onShortcutBehaviorChange(DEFAULT_SHORTCUT);
+                setIsCapturingShortcut(false);
+              }}
+            >
+              Reset to default
+            </button>
+          </div>
+          <p id="shortcut-behavior-hint" className="field-hint">
+            Press Record to update key combo.
+          </p>
+          <InlineError id="shortcut-behavior-error" message={props.preferenceErrors.shortcutBehavior} />
+        </div>
+      </article>
     </div>
   );
 }
@@ -1057,7 +1060,13 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
             <p className="onboarding-step-progress">Step {currentStep + 1} of {STEP_META.length}</p>
           </header>
 
-          <section className="section-card onboarding-form-card">
+          <section
+            className={
+              activeStep.key === "permissions"
+                ? "onboarding-form-card onboarding-form-card-permissions app-dashboard-settings"
+                : "section-card onboarding-form-card"
+            }
+          >
             <div>
               <h2 className="onboarding-step-title">{activeStep.title}</h2>
               <p>{activeStep.description}</p>
