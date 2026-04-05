@@ -33,7 +33,7 @@ export function createVoicePopoverWindow(): BrowserWindow {
       preload: resolvePreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
       devTools: true,
     },
   });
@@ -43,6 +43,11 @@ export function createVoicePopoverWindow(): BrowserWindow {
   const centeredX = Math.round(workAreaX + (workAreaWidth - windowWidth) / 2);
   const anchoredY = Math.round(workAreaY + workAreaHeight * verticalAnchorRatio - windowHeight / 2);
   win.setPosition(centeredX, anchoredY);
+  win.webContents.setBackgroundThrottling(false);
+  // Log popover console messages to the terminal
+  win.webContents.on("console-message", (_event, _level, message) => {
+    console.log("[popover]", message);
+  });
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen: true,

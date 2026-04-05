@@ -73,7 +73,7 @@ export function useMicrophone({
       clearCaptureWatchdog();
 
       if (meterAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(meterAnimationFrameRef.current);
+        clearInterval(meterAnimationFrameRef.current);
         meterAnimationFrameRef.current = null;
       }
 
@@ -173,23 +173,33 @@ export function useMicrophone({
       const silentGain = ctx.createGain();
       silentGain.gain.value = 0;
 
+      const timeDomainBuf = new Uint8Array(1024);
+      let smoothedLevel = 0;
+
       const processMeterLevel = () => {
         const activeAnalyser = analyserRef.current;
         if (!recordingActiveRef.current || !activeAnalyser) {
           return;
         }
 
-        const timeDomain = new Uint8Array(activeAnalyser.fftSize);
-        activeAnalyser.getByteTimeDomainData(timeDomain);
+        activeAnalyser.getByteTimeDomainData(timeDomainBuf);
         let sumSquares = 0;
-        for (let i = 0; i < timeDomain.length; i += 1) {
-          const normalized = (timeDomain[i] - 128) / 128;
-          sumSquares += normalized * normalized;
+        for (let i = 0; i < timeDomainBuf.length; i += 1) {
+          const sample = (timeDomainBuf[i] - 128) / 128;
+          sumSquares += sample * sample;
         }
 
-        const rms = Math.sqrt(sumSquares / timeDomain.length);
-        onAudioLevel?.(Math.min(1, rms * 10));
-        meterAnimationFrameRef.current = requestAnimationFrame(processMeterLevel);
+        const rms = Math.sqrt(sumSquares / timeDomainBuf.length);
+        const raw = Math.min(1, rms * 10);
+
+        // Asymmetric smoothing: fast attack, slow decay
+        if (raw > smoothedLevel) {
+          smoothedLevel = smoothedLevel * 0.3 + raw * 0.7;
+        } else {
+          smoothedLevel = smoothedLevel * 0.85 + raw * 0.15;
+        }
+
+        onAudioLevel?.(smoothedLevel);
       };
 
       processor.onaudioprocess = (e) => {
@@ -221,7 +231,7 @@ export function useMicrophone({
       recordingActiveRef.current = true;
       setIsRecording(true);
       onAudioLevel?.(0);
-      meterAnimationFrameRef.current = requestAnimationFrame(processMeterLevel);
+      meterAnimationFrameRef.current = window.setInterval(processMeterLevel, 30) as unknown as number;
 
       scheduleCaptureWatchdog();
 
@@ -233,7 +243,7 @@ export function useMicrophone({
       hasReceivedAudioFrameRef.current = false;
       hasGrantedSilentCaptureGraceRef.current = false;
       if (meterAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(meterAnimationFrameRef.current);
+        clearInterval(meterAnimationFrameRef.current);
         meterAnimationFrameRef.current = null;
       }
       processor?.disconnect();

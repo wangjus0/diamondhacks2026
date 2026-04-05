@@ -1,13 +1,15 @@
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import { app, BrowserWindow, globalShortcut, ipcMain, session, shell, safeStorage, systemPreferences } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, session, shell, safeStorage, systemPreferences } from "electron";
 import { readSupabasePublicConfig, type SupabasePublicConfig } from "./supabaseConfig";
 import { createMainWindow, getMainWindow } from "./windows/mainWindow";
 import { createVoicePopoverWindow } from "./windows/voicePopoverWindow";
 import { BACKGROUND_BLUR_GRACE_PERIOD_MS, shouldHideVoicePopoverOnBlur } from "./voicePopoverBehavior";
 import { isMicrophonePermission, isTrustedMicrophoneRequest } from "./permissions/mediaPermissions";
 import { PendingOAuthCallbackStore } from "./oauthCallback";
+
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 let appReady = false;
 const pendingOAuthCallbackStore = new PendingOAuthCallbackStore();
@@ -516,6 +518,35 @@ function hideVoicePopover(): void {
 function registerShortcutIpcHandlers(): void {
   ipcMain.handle("shortcut:close-popover", () => {
     hideVoicePopover();
+  });
+
+  ipcMain.handle("shortcut:reposition-popover", (_event, position: "center" | "top-right") => {
+    if (!voicePopoverWindow || voicePopoverWindow.isDestroyed()) return;
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { x: waX, y: waY, width: waW, height: waH } = primaryDisplay.workArea;
+    // Always use base pill size for consistent positioning
+    const baseW = 430;
+    const baseH = 86;
+
+    if (position === "top-right") {
+      const x = Math.round(waX + waW - baseW - 16);
+      const y = Math.round(waY + 16);
+      voicePopoverWindow.setPosition(x, y);
+    } else {
+      const x = Math.round(waX + (waW - baseW) / 2);
+      const y = Math.round(waY + waH * 0.75 - baseH / 2);
+      voicePopoverWindow.setPosition(x, y);
+    }
+  });
+
+  ipcMain.handle("shortcut:resize-popover", (_event, width: number, height: number) => {
+    if (!voicePopoverWindow || voicePopoverWindow.isDestroyed()) return;
+    const [oldW] = voicePopoverWindow.getSize();
+    const [oldX, oldY] = voicePopoverWindow.getPosition();
+    voicePopoverWindow.setSize(Math.round(width), Math.round(height));
+    // Re-center horizontally after resize
+    const dx = Math.round((oldW - width) / 2);
+    voicePopoverWindow.setPosition(oldX + dx, oldY);
   });
 }
 

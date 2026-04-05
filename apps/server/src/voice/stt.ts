@@ -12,6 +12,7 @@ export class SttAdapter {
   private apiKey: string;
   private callbacks: SttCallbacks;
   private closingByClient = false;
+  private pendingChunks: string[] = [];
 
   constructor(apiKey: string, callbacks: SttCallbacks) {
     this.apiKey = apiKey;
@@ -32,7 +33,12 @@ export class SttAdapter {
       this.closingByClient = false;
 
       this.ws.on("open", () => {
-        console.log("[STT] Connected to ElevenLabs");
+        console.log(`[STT] Connected to ElevenLabs (${this.pendingChunks.length} buffered chunks)`);
+        // Flush any audio chunks that arrived before the connection opened
+        for (const chunk of this.pendingChunks) {
+          this.ws!.send(chunk);
+        }
+        this.pendingChunks = [];
         resolve();
       });
 
@@ -101,15 +107,51 @@ export class SttAdapter {
   }
 
   sendAudio(base64Chunk: string): void {
-    if (this.ws?.readyState === WebSocket.OPEN && base64Chunk.length > 0) {
-      this.ws.send(
-        JSON.stringify({
-          message_type: "input_audio_chunk",
-          audio_base_64: base64Chunk,
-          sample_rate: AUDIO_SAMPLE_RATE,
-        })
-      );
+    if (!base64Chunk.length) return;
+
+    const message = JSON.stringify({
+      message_type: "input_audio_chunk",
+      audio_base_64: base64Chunk,
+      sample_rate: AUDIO_SAMPLE_RATE,
+    });
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(message);
+    } else {
+      // Buffer chunks until the connection opens
+      this.pendingChunks.push(message);
     }
+  }
+
+  /**
+   * Signal end-of-audio and wait for the final transcript before closing.
+   * Returns a promise that resolves once the WebSocket is fully closed.
+   */
+  closeGracefully(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        this.ws = null;
+        resolve();
+        return;
+      }
+
+      this.closingByClient = true;
+
+      // Give ElevenLabs time to flush the final transcript before closing
+      const timeout = setTimeout(() => {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.close(1000, "client_closed");
+        }
+        resolve();
+      }, 1500);
+
+      this.ws.on("close", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+
+      this.ws.close(1000, "client_closed");
+    });
   }
 
   close(): void {

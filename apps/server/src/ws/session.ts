@@ -151,6 +151,7 @@ export class Session {
 
   private onStartSession(profileId?: string, browserUseApiKey?: string): void {
     console.log(`[session:${this.id}] Session started`);
+    this.audioChunkCount = 0;
     this.hasFinalizedRun = false;
     this.narrationSequence = 0;
     this.browserProfileId = normalizeProfileId(profileId);
@@ -166,7 +167,13 @@ export class Session {
     this.setState("listening");
   }
 
+  private audioChunkCount = 0;
+
   private async onAudioChunk(data: string): Promise<void> {
+    this.audioChunkCount++;
+    if (this.audioChunkCount % 10 === 1) {
+      console.log(`[session:${this.id}] Audio chunk #${this.audioChunkCount} (len=${data.length}, state=${this.state})`);
+    }
     if (this.state === "idle") {
       this.setState("listening");
     }
@@ -197,11 +204,12 @@ export class Session {
     console.log(`[session:${this.id}] Audio stream ended`);
 
     if (this.stt) {
-      this.stt.close();
+      await this.stt.closeGracefully();
       this.stt = null;
     }
 
     const transcript = this.accumulatedTranscript.trim();
+    console.log(`[session:${this.id}] Transcript: "${transcript}" (state: ${this.state})`);
     if (transcript) {
       await handleTranscriptFinal(
         this,
