@@ -13,6 +13,7 @@ export type OnboardingFormData = {
     assistantAccess: "granted" | "pending";
     microphoneAccess: MicrophoneAccessStatus;
     screenAccess: "granted" | "pending";
+    browserProfileId: string;
   };
   account: {
     displayName: string;
@@ -75,6 +76,15 @@ const SCHEMA: {
           : "Please enable microphone access to continue.",
     ],
     screenAccess: [],
+    browserProfileId: [
+      (value) =>
+        value.trim().length === 0 ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          value.trim()
+        )
+          ? null
+          : "Enter a valid Browser Use profile ID (UUID).",
+    ],
   },
   account: {
     displayName: [required, maxLength(80, "Display name must be 80 characters or fewer.")],
@@ -98,6 +108,7 @@ export function createDefaultOnboardingData(): OnboardingFormData {
       assistantAccess: "pending",
       microphoneAccess: "not-determined",
       screenAccess: "pending",
+      browserProfileId: "",
     },
     account: {
       displayName: "",
@@ -150,6 +161,10 @@ export function mergePersistedOnboardingData(raw: unknown): OnboardingFormData {
         permissions.assistantAccess === "granted" ? "granted" : defaults.permissions.assistantAccess,
       microphoneAccess,
       screenAccess: permissions.screenAccess === "granted" ? "granted" : defaults.permissions.screenAccess,
+      browserProfileId:
+        typeof permissions.browserProfileId === "string"
+          ? permissions.browserProfileId
+          : defaults.permissions.browserProfileId,
     },
     account: {
       displayName: typeof account.displayName === "string" ? account.displayName : defaults.account.displayName,

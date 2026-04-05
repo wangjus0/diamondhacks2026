@@ -27,6 +27,7 @@ class FakeSession {
 test("final transcript flows through intent, browser action, narration, and done", async () => {
   const session = new FakeSession();
   const browserCalls: string[] = [];
+  const refineCalls: Array<{ userRequest: string; rawOutput: string }> = [];
   const narratedTexts: string[] = [];
 
   await handleTranscriptFinal(
@@ -44,12 +45,16 @@ test("final transcript flows through intent, browser action, narration, and done
         runSearch: async (query, callbacks) => {
           browserCalls.push(query);
           callbacks.onStatus("Opened search results");
-          return "Top result: Demo Project";
+          return "I navigated to search results.\n1. Demo Project - https://example.com/demo";
         },
         runFormFillDraft: async () => {
           throw new Error("Unexpected form fill path");
         },
       }),
+      refineOutput: async (_ai, userRequest, rawOutput) => {
+        refineCalls.push({ userRequest, rawOutput });
+        return "Top result: Demo Project - https://example.com/demo";
+      },
       narrate: async (narrationSession, text) => {
         narratedTexts.push(text);
         narrationSession.send({ type: "narration_text", text });
@@ -60,7 +65,13 @@ test("final transcript flows through intent, browser action, narration, and done
 
   assert.deepEqual(session.states, ["thinking", "acting", "speaking", "idle"]);
   assert.deepEqual(browserCalls, ["search for Murmur demo projects"]);
-  assert.deepEqual(narratedTexts, ["Top result: Demo Project"]);
+  assert.deepEqual(refineCalls, [
+    {
+      userRequest: "search for Murmur demo projects",
+      rawOutput: "I navigated to search results.\n1. Demo Project - https://example.com/demo",
+    },
+  ]);
+  assert.deepEqual(narratedTexts, ["Top result: Demo Project - https://example.com/demo"]);
   assert.equal(session.browserAdapter, null);
 
   assert.deepEqual(

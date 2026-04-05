@@ -8,6 +8,7 @@ import { buildDesktopOAuthCallbackUrl } from "./http/auth-callback.js";
 import { SessionMemoryStore } from "./memory/session-memory-store.js";
 import { SessionPersistenceService } from "./modules/session/session-persistence-service.js";
 import { SupabaseSessionPersistence } from "./persistence/supabase-session-persistence.js";
+import { createBrowserUseProfilesRouter } from "./routes/browser-use-profiles.js";
 import { createSessionsRouter } from "./routes/sessions.js";
 import { Session } from "./ws/session.js";
 
@@ -20,6 +21,7 @@ const sessionStore = new SessionMemoryStore();
 const sessionPersistence = new SessionPersistenceService(sessionStore);
 
 app.use("/sessions", createSessionsRouter(sessionPersistence));
+app.use("/integrations/browser-use/profiles", createBrowserUseProfilesRouter(env.BROWSER_USE_API_KEY));
 
 if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
   const replayPersistence = new SupabaseSessionPersistence(

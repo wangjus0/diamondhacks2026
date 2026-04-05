@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  hydrateBrowserUseApiKeyFromDesktop,
+  normalizeBrowserProfileId,
+  normalizeBrowserUseApiKey,
+  persistBrowserProfileId,
+  persistBrowserUseApiKey,
+} from "../../lib/browser-profile";
+import { resolveServerHttpOrigin } from "../../lib/server-origin";
 import { getSupabaseClient } from "../../lib/supabase";
 import { useAuth } from "./AuthProvider";
 import {
@@ -61,6 +69,11 @@ const INITIAL_STEP_ERRORS: Record<StepKey, StepErrors> = {
 };
 
 const LAST_STEP_INDEX = STEP_META.length - 1;
+const BROWSER_PROFILE_SYNC_GUIDE_URL =
+  "https://docs.browser-use.com/cloud/guides/profile-sync";
+const BROWSER_USE_SETTINGS_URL = "https://cloud.browser-use.com/settings";
+const BROWSER_PROFILE_SYNC_COMMAND =
+  "export BROWSER_USE_API_KEY=your_key && curl -fsSL https://browser-use.com/profile.sh | sh";
 
 function InlineError({ message, id }: { message?: string; id: string }) {
   if (!message) {
@@ -87,6 +100,17 @@ function PermissionStep(props: {
   onRequestMicrophoneAccess: () => Promise<void>;
   onCheckMicrophoneStatus: () => Promise<void>;
   onOpenMicrophoneSettings: () => Promise<void>;
+  browserUseApiKey: string;
+  onBrowserUseApiKeyChange: (value: string) => void;
+  onStartAutomaticBrowserProfileSync: () => Promise<void>;
+  runningAutomaticSync: boolean;
+  onBrowserProfileIdChange: (value: string) => void;
+  onOpenBrowserUseSettings: () => Promise<void>;
+  onCopyBrowserProfileSyncCommand: () => Promise<void>;
+  onOpenBrowserProfileSyncGuide: () => Promise<void>;
+  onValidateBrowserProfileId: () => Promise<void>;
+  checkingBrowserProfile: boolean;
+  browserProfileConnected: boolean;
   checkingStatus: boolean;
 }) {
   return (
@@ -160,6 +184,104 @@ function PermissionStep(props: {
           }}
           aria-pressed={props.data.screenAccess === "granted"}
         />
+      </div>
+
+      <div className="permission-item">
+        <div>
+          <h3 className="permission-item-title">Connect Browser Profile</h3>
+          <p className="permission-item-copy">
+            Sync your local Chrome cookies to Browser Use, then paste the profile ID so Murmur can reuse your logged-in sessions.
+          </p>
+          <label className="field">
+            <span className="field-label">Browser Use API key</span>
+            <input
+              type="password"
+              value={props.browserUseApiKey}
+              onChange={(event) => {
+                props.onBrowserUseApiKeyChange(event.target.value);
+              }}
+              placeholder="bu_..."
+            />
+          </label>
+          <p className="permission-item-copy">
+            Tutorial:
+          </p>
+          <ol className="permission-item-copy">
+            <li>Open Browser Use settings and copy your API key.</li>
+            <li>Paste the key above and click Sync Automatically.</li>
+            <li>In the opened browser, select the accounts to sync.</li>
+            <li>If the profile ID is not auto-detected, paste it below and click Verify profile.</li>
+          </ol>
+          <p className="permission-status">
+            Sync command: <code>{BROWSER_PROFILE_SYNC_COMMAND}</code>
+          </p>
+          <p className="permission-status">
+            Status: {props.browserProfileConnected ? "Connected" : "Not connected"}
+          </p>
+          <label className="field">
+            <span className="field-label">Browser Use profile ID</span>
+            <input
+              type="text"
+              value={props.data.browserProfileId}
+              onChange={(event) => {
+                props.onBrowserProfileIdChange(event.target.value);
+              }}
+              placeholder="3c90c3cc-0d44-4b50-8888-8dd25736052a"
+              aria-invalid={Boolean(props.errors.browserProfileId)}
+              aria-describedby={props.errors.browserProfileId ? "browser-profile-id-error" : undefined}
+            />
+            <InlineError id="browser-profile-id-error" message={props.errors.browserProfileId} />
+          </label>
+        </div>
+        <div className="permission-item-actions">
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => {
+              void props.onStartAutomaticBrowserProfileSync();
+            }}
+            disabled={props.runningAutomaticSync}
+          >
+            {props.runningAutomaticSync ? "Syncing..." : "Sync Automatically"}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              void props.onOpenBrowserUseSettings();
+            }}
+          >
+            Open Browser Use Settings
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              void props.onCopyBrowserProfileSyncCommand();
+            }}
+          >
+            Copy Sync Command
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              void props.onOpenBrowserProfileSyncGuide();
+            }}
+          >
+            Open Sync Guide
+          </button>
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => {
+              void props.onValidateBrowserProfileId();
+            }}
+            disabled={props.checkingBrowserProfile}
+          >
+            {props.checkingBrowserProfile ? "Verifying..." : "Verify profile"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -291,6 +413,9 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
   const [saveError, setSaveError] = useState<string | null>(initialLoadError ?? null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isCheckingPermission, setIsCheckingPermission] = useState(false);
+  const [isCheckingBrowserProfile, setIsCheckingBrowserProfile] = useState(false);
+  const [browserUseApiKey, setBrowserUseApiKey] = useState("");
+  const [isRunningAutomaticSync, setIsRunningAutomaticSync] = useState(false);
 
   const setMicrophoneAccess = (value: MicrophoneAccessStatus) => {
     setFormData((previous) => ({
@@ -369,6 +494,135 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
     setStatusMessage("Open your browser or system privacy settings to enable microphone access.");
   };
 
+  const openBrowserProfileSyncGuide = async () => {
+    const externalUrlApi = window.desktop?.openExternalUrl;
+    if (externalUrlApi) {
+      await externalUrlApi(BROWSER_PROFILE_SYNC_GUIDE_URL);
+      return;
+    }
+
+    window.open(BROWSER_PROFILE_SYNC_GUIDE_URL, "_blank", "noopener,noreferrer");
+  };
+
+  const openBrowserUseSettings = async () => {
+    const externalUrlApi = window.desktop?.openExternalUrl;
+    if (externalUrlApi) {
+      await externalUrlApi(BROWSER_USE_SETTINGS_URL);
+      return;
+    }
+
+    window.open(BROWSER_USE_SETTINGS_URL, "_blank", "noopener,noreferrer");
+  };
+
+  const copyBrowserProfileSyncCommand = async () => {
+    setSaveError(null);
+
+    if (!navigator.clipboard?.writeText) {
+      setStatusMessage("Clipboard is unavailable. Copy the command from the tutorial section.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(BROWSER_PROFILE_SYNC_COMMAND);
+      setStatusMessage("Browser profile sync command copied.");
+    } catch {
+      setSaveError("Could not copy sync command. Copy it manually from the tutorial section.");
+    }
+  };
+
+  const validateBrowserProfileId = async () => {
+    setSaveError(null);
+    setStatusMessage(null);
+    setIsCheckingBrowserProfile(true);
+
+    try {
+      const candidate = normalizeBrowserProfileId(formData.permissions.browserProfileId);
+      if (!candidate) {
+        setStepErrors((previous) => ({
+          ...previous,
+          permissions: {
+            ...previous.permissions,
+            browserProfileId: "Enter a valid Browser Use profile ID (UUID).",
+          },
+        }));
+        return;
+      }
+
+      const serverOrigin = resolveServerHttpOrigin(
+        window.location,
+        window.desktop?.getRealtimeWebSocketUrl?.()
+      );
+      const response = await fetch(
+        `${serverOrigin}/integrations/browser-use/profiles/${encodeURIComponent(candidate)}/validate`,
+        {
+          headers: browserUseApiKey
+            ? {
+                "x-murmur-browser-use-api-key": browserUseApiKey,
+              }
+            : undefined,
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        valid?: boolean;
+        message?: string;
+        profileId?: string;
+      };
+      if (!response.ok || payload.valid !== true) {
+        setSaveError(payload.message || "Could not verify Browser Use profile ID.");
+        return;
+      }
+
+      const normalized = normalizeBrowserProfileId(payload.profileId) ?? candidate;
+      updateStepField("permissions", "browserProfileId", normalized);
+      await persistBrowserProfileId(normalized);
+      setStatusMessage("Browser profile connected.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to verify Browser Use profile ID.");
+    } finally {
+      setIsCheckingBrowserProfile(false);
+    }
+  };
+
+  const startAutomaticBrowserProfileSync = async () => {
+    setSaveError(null);
+    setStatusMessage(null);
+
+    const normalizedApiKey = normalizeBrowserUseApiKey(browserUseApiKey);
+    if (!normalizedApiKey) {
+      setSaveError("Enter a valid Browser Use API key (starts with bu_).");
+      return;
+    }
+
+    const syncApi = window.desktop?.browserUse?.startProfileSync;
+    if (!syncApi) {
+      setSaveError("Automatic sync is only available in the desktop app. Use the guide to sync manually.");
+      return;
+    }
+
+    setIsRunningAutomaticSync(true);
+    try {
+      await persistBrowserUseApiKey(normalizedApiKey);
+      const result = await syncApi(normalizedApiKey);
+      if (!result.success) {
+        setSaveError(result.message);
+        return;
+      }
+
+      if (result.profileId) {
+        updateStepField("permissions", "browserProfileId", result.profileId);
+        await persistBrowserProfileId(result.profileId);
+        setStatusMessage("Browser profile synced and connected.");
+        return;
+      }
+
+      setStatusMessage("Sync completed. Paste the generated profile ID and click Verify profile.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Automatic profile sync failed.");
+    } finally {
+      setIsRunningAutomaticSync(false);
+    }
+  };
+
   useEffect(() => {
     let isActive = true;
 
@@ -410,6 +664,13 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
     };
 
     void hydrate();
+    void hydrateBrowserUseApiKeyFromDesktop().then((apiKey) => {
+      if (!apiKey) {
+        return;
+      }
+
+      setBrowserUseApiKey(apiKey);
+    });
 
     return () => {
       isActive = false;
@@ -432,7 +693,15 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
   const assistantEnabled = formData.permissions.assistantAccess === "granted";
   const microphoneReady = isMicrophoneAccessSatisfied(formData.permissions.microphoneAccess);
   const screenEnabled = formData.permissions.screenAccess === "granted";
-  const permissionProgressCount = [assistantEnabled, microphoneReady, screenEnabled].filter(Boolean).length;
+  const browserProfileConnected = Boolean(
+    normalizeBrowserProfileId(formData.permissions.browserProfileId)
+  );
+  const permissionProgressCount = [
+    assistantEnabled,
+    microphoneReady,
+    screenEnabled,
+    browserProfileConnected,
+  ].filter(Boolean).length;
 
   const persistProgress = async (options: { completed: boolean; completedAt: string | null; nextStep: number }) => {
     if (!user) {
@@ -456,6 +725,10 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
     if (error) {
       throw new Error(error.message);
     }
+
+    await persistBrowserProfileId(
+      normalizeBrowserProfileId(formData.permissions.browserProfileId)
+    );
   };
 
   const applyValidationForCurrentStep = (): boolean => {
@@ -614,6 +887,21 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
                 onRequestMicrophoneAccess={requestMicrophoneAccess}
                 onCheckMicrophoneStatus={checkMicrophoneStatus}
                 onOpenMicrophoneSettings={openMicrophoneSettings}
+                onBrowserProfileIdChange={(value) => {
+                  updateStepField("permissions", "browserProfileId", value);
+                }}
+                browserUseApiKey={browserUseApiKey}
+                onBrowserUseApiKeyChange={(value) => {
+                  setBrowserUseApiKey(value);
+                }}
+                onStartAutomaticBrowserProfileSync={startAutomaticBrowserProfileSync}
+                runningAutomaticSync={isRunningAutomaticSync}
+                onOpenBrowserUseSettings={openBrowserUseSettings}
+                onCopyBrowserProfileSyncCommand={copyBrowserProfileSyncCommand}
+                onOpenBrowserProfileSyncGuide={openBrowserProfileSyncGuide}
+                onValidateBrowserProfileId={validateBrowserProfileId}
+                checkingBrowserProfile={isCheckingBrowserProfile}
+                browserProfileConnected={browserProfileConnected}
                 checkingStatus={isCheckingPermission}
               />
             )}
@@ -726,7 +1014,7 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
           <div className="permission-dialog">
             <p className="permission-title">Enable system access for the best Murmur experience.</p>
             <p className="permission-copy">
-              {permissionProgressCount}/3 setup checks complete. Confirm microphone access so voice commands work reliably.
+              {permissionProgressCount}/4 setup checks complete. Confirm microphone and browser profile access so voice commands work reliably.
             </p>
             <div className="permission-actions">
               <button
@@ -764,9 +1052,9 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
               <span>Screen context</span>
               <span className={`system-toggle ${screenEnabled ? "system-toggle-on" : ""}`} />
             </div>
-            <div className="system-row">
-              <span>Browser control</span>
-              <span className="system-toggle system-toggle-on" />
+            <div className={`system-row ${browserProfileConnected ? "system-row-active" : ""}`}>
+              <span>Browser profile</span>
+              <span className={`system-toggle ${browserProfileConnected ? "system-toggle-on" : ""}`} />
             </div>
           </div>
         </aside>

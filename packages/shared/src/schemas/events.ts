@@ -14,7 +14,11 @@ const IntentResultSchema = z.object({
 
 // ── Client → Server ────────────────────────────────────────
 export const ClientEventSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("start_session") }),
+  z.object({
+    type: z.literal("start_session"),
+    profileId: z.string().uuid().optional(),
+    browserUseApiKey: z.string().min(1).optional(),
+  }),
   z.object({ type: z.literal("audio_chunk"), data: z.string() }),
   z.object({ type: z.literal("audio_end") }),
   z.object({ type: z.literal("interrupt") }),

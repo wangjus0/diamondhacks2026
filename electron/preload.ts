@@ -21,6 +21,7 @@ const desktopApi = Object.freeze({
     return `ws://127.0.0.1:${serverPort}/ws`;
   },
   getSupabaseConfig: () => Object.freeze(readSupabasePublicConfig()),
+  openExternalUrl: (url: string) => ipcRenderer.invoke("system:open-external-url", url),
   shortcut: {
     closePopover: () => ipcRenderer.invoke("shortcut:close-popover"),
   },
@@ -47,6 +48,10 @@ const desktopApi = Object.freeze({
     requestMicrophoneAccess: () => ipcRenderer.invoke("permissions:request-microphone-access"),
     getMicrophoneAccessStatus: () => ipcRenderer.invoke("permissions:get-microphone-access-status"),
     openMicrophoneSettings: () => ipcRenderer.invoke("permissions:open-microphone-settings"),
+  },
+  browserUse: {
+    startProfileSync: (apiKey: string) =>
+      ipcRenderer.invoke("browser-use:start-profile-sync", apiKey),
   },
 });
 

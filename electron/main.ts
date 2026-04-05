@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { spawn } from "node:child_process";
 import { app, BrowserWindow, globalShortcut, ipcMain, session, shell, safeStorage, systemPreferences } from "electron";
 import { readSupabasePublicConfig, type SupabasePublicConfig } from "./supabaseConfig";
 import { createMainWindow, getMainWindow } from "./windows/mainWindow";
@@ -22,6 +23,8 @@ const DASHBOARD_SHORTCUT = "CommandOrControl+Shift+M";
 const APP_PROTOCOL = "murmur";
 const OAUTH_CALLBACK_EVENT = "auth:oauth-callback";
 const AUTH_STORE_FILENAME = "auth-session-store.bin";
+const PROFILE_SYNC_COMMAND = "curl -fsSL https://browser-use.com/profile.sh | sh";
+const PROFILE_SYNC_TIMEOUT_MS = 10 * 60 * 1000;
 
 function registerMediaPermissionHandlers(): void {
   const defaultSession = session.defaultSession;
@@ -173,6 +176,15 @@ function registerAuthIpcHandlers(config: SupabasePublicConfig): void {
     }
   };
 
+  ipcMain.handle("system:open-external-url", async (_event, rawUrl: string) => {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw new Error("Only http(s) URLs are allowed.");
+    }
+
+    await shell.openExternal(parsed.toString());
+  });
+
   ipcMain.handle("auth:start-google-oauth", async (_event, authUrl: string) => {
     const parsed = new URL(authUrl);
     const isAllowedUrl =
@@ -257,6 +269,122 @@ function registerAuthIpcHandlers(config: SupabasePublicConfig): void {
       await shell.openExternal("ms-settings:privacy-microphone");
     }
   });
+
+  ipcMain.handle("browser-use:start-profile-sync", async (_event, rawApiKey: string) => {
+    const apiKey = normalizeBrowserUseApiKey(rawApiKey);
+    if (!apiKey) {
+      throw new Error("Invalid Browser Use API key format.");
+    }
+
+    if (process.platform !== "darwin" && process.platform !== "linux") {
+      throw new Error("Automatic profile sync is currently supported on macOS and Linux.");
+    }
+
+    const runResult = await runProfileSyncCommand(apiKey);
+    const combinedOutput = [runResult.stdout, runResult.stderr].filter(Boolean).join("\n");
+    const profileId = extractProfileIdFromOutput(combinedOutput);
+
+    return {
+      success: runResult.exitCode === 0,
+      profileId,
+      message:
+        runResult.exitCode === 0
+          ? profileId
+            ? "Profile sync completed."
+            : "Profile sync completed. Copy the generated profile ID and paste it into onboarding."
+          : "Profile sync failed. Review the output and retry.",
+      output: combinedOutput.trim() || null,
+    };
+  });
+}
+
+type ProfileSyncRunResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+function runProfileSyncCommand(apiKey: string): Promise<ProfileSyncRunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(PROFILE_SYNC_COMMAND, {
+      shell: true,
+      env: {
+        ...process.env,
+        BROWSER_USE_API_KEY: apiKey,
+      },
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error("Profile sync timed out. Please try again."));
+    }, PROFILE_SYNC_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer | string) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      resolve({
+        exitCode: code ?? 1,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+function normalizeBrowserUseApiKey(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/^bu_[A-Za-z0-9_-]{8,}$/i.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function extractProfileIdFromOutput(output: string): string | null {
+  const uuidMatches =
+    output.match(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi
+    ) ?? [];
+  if (uuidMatches.length > 0) {
+    return uuidMatches[uuidMatches.length - 1] ?? null;
+  }
+
+  const prefixedMatches = output.match(/profile_[A-Za-z0-9_-]{6,}/gi) ?? [];
+  if (prefixedMatches.length > 0) {
+    return prefixedMatches[prefixedMatches.length - 1] ?? null;
+  }
+
+  return null;
 }
 
 function registerProtocolHandlers(): void {

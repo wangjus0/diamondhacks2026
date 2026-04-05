@@ -12,6 +12,8 @@ export const startSessionPayloadSchema = z
   .object({
     sessionId: z.string().min(1).optional(),
     locale: z.string().min(2).optional(),
+    profileId: z.string().uuid().optional(),
+    browserUseApiKey: z.string().min(1).optional(),
   })
   .strict();
 

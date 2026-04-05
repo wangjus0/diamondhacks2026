@@ -17,7 +17,12 @@ test("mergePersistedOnboardingData falls back to defaults for invalid payload", 
 test("mergePersistedOnboardingData restores known fields from persisted payload", () => {
   const result = mergePersistedOnboardingData({
     steps: {
-      permissions: { assistantAccess: "granted", microphoneAccess: "granted", screenAccess: "pending" },
+      permissions: {
+        assistantAccess: "granted",
+        microphoneAccess: "granted",
+        screenAccess: "pending",
+        browserProfileId: "3c90c3cc-0d44-4b50-8888-8dd25736052a",
+      },
       account: { displayName: "Alex", workspaceName: "Murmur" },
       workflow: { primaryGoal: "Automate repetitive tasks", useCases: "Research and drafting" },
       preferences: { shortcutBehavior: "Open near cursor", notes: "none" },
@@ -25,6 +30,7 @@ test("mergePersistedOnboardingData restores known fields from persisted payload"
   });
 
   assert.equal(result.permissions.microphoneAccess, "granted");
+  assert.equal(result.permissions.browserProfileId, "3c90c3cc-0d44-4b50-8888-8dd25736052a");
   assert.equal(result.account.displayName, "Alex");
   assert.equal(result.workflow.primaryGoal, "Automate repetitive tasks");
   assert.equal(result.preferences.shortcutBehavior, "Open near cursor");
@@ -42,6 +48,15 @@ test("validateStep requires microphone access in permissions step", () => {
   const errors = validateStep("permissions", defaults);
 
   assert.equal(errors.microphoneAccess, "Please enable microphone access to continue.");
+});
+
+test("validateStep rejects invalid browser profile id format", () => {
+  const defaults = createDefaultOnboardingData();
+  defaults.permissions.microphoneAccess = "granted";
+  defaults.permissions.browserProfileId = "not-a-valid-id";
+  const errors = validateStep("permissions", defaults);
+
+  assert.equal(errors.browserProfileId, "Enter a valid Browser Use profile ID (UUID).");
 });
 
 test("validateStep requires placeholder fields for account step", () => {

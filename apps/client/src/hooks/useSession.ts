@@ -1,5 +1,9 @@
 import { useEffect, useRef, useCallback } from "react";
 import { createSocket, type Socket } from "../lib/ws";
+import {
+  getStoredBrowserProfileId,
+  getStoredBrowserUseApiKey,
+} from "../lib/browser-profile";
 import { useSessionStore } from "../store/session";
 import type { useAudioPlayer } from "../features/narration/useAudioPlayer";
 import { resolveSessionSocketUrl } from "./sessionSocketUrl";
@@ -91,7 +95,13 @@ export function useSession(
   }, []);
 
   const sendStartSession = useCallback(() => {
-    socketRef.current?.send({ type: "start_session" });
+    const profileId = getStoredBrowserProfileId();
+    const browserUseApiKey = getStoredBrowserUseApiKey();
+    socketRef.current?.send({
+      type: "start_session",
+      ...(profileId ? { profileId } : {}),
+      ...(browserUseApiKey ? { browserUseApiKey } : {}),
+    });
   }, []);
 
   const sendAudioChunk = useCallback((data: string) => {

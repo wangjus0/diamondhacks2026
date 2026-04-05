@@ -12,6 +12,8 @@ export interface IntentResult {
 // ── Client → Server events ─────────────────────────────────
 export interface StartSessionEvent {
   type: "start_session";
+  profileId?: string;
+  browserUseApiKey?: string;
 }
 
 export interface AudioChunkEvent {

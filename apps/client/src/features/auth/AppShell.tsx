@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { App } from "../../App";
 import { getSupabaseClient } from "../../lib/supabase";
+import { persistBrowserProfileId } from "../../lib/browser-profile";
 import { useAuth } from "./AuthProvider";
 import { AuthScreen } from "./AuthScreen";
 import { resolveGuardDestination } from "./guard";
 import { OnboardingGateScaffold } from "./OnboardingGateScaffold";
+import { mergePersistedOnboardingData } from "./onboardingSchema";
 
 type OnboardingStatus = {
   isLoading: boolean;
@@ -14,6 +16,7 @@ type OnboardingStatus = {
 
 type OnboardingLookup = {
   completed: boolean;
+  responses: unknown;
 };
 
 const INITIAL_ONBOARDING_STATUS: OnboardingStatus = {
@@ -52,7 +55,7 @@ export function AppShell() {
 
       const { data, error } = await supabase
         .from("onboarding_responses")
-        .select("completed")
+        .select("completed,responses")
         .eq("user_id", user.id)
         .maybeSingle<OnboardingLookup>();
 
@@ -67,6 +70,11 @@ export function AppShell() {
           loadError: error.message,
         });
         return;
+      }
+
+      if (data?.responses) {
+        const merged = mergePersistedOnboardingData(data.responses);
+        await persistBrowserProfileId(merged.permissions.browserProfileId.trim() || null);
       }
 
       setOnboardingStatus({

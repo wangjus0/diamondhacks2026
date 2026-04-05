@@ -29,14 +29,27 @@ type DesktopPermissionsApi = {
   openMicrophoneSettings: () => Promise<void>;
 };
 
+type DesktopBrowserUseApi = {
+  startProfileSync: (
+    apiKey: string
+  ) => Promise<{
+    success: boolean;
+    profileId: string | null;
+    message: string;
+    output: string | null;
+  }>;
+};
+
 type DesktopApi = {
   ping: () => string;
   getRuntimeInfo: () => DesktopRuntimeInfo;
   getSupabaseConfig: () => DesktopSupabaseConfig;
   getRealtimeWebSocketUrl?: () => string;
+  openExternalUrl?: (url: string) => Promise<void>;
   shortcut?: DesktopShortcutApi;
   auth?: DesktopAuthApi;
   permissions?: DesktopPermissionsApi;
+  browserUse?: DesktopBrowserUseApi;
 };
 
 declare global {

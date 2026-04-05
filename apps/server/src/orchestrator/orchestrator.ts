@@ -47,6 +47,11 @@ interface TranscriptFinalLegacyDependencies {
     apiKey: string
   ) => Promise<void>;
   createBrowserAdapter?: (apiKey: string) => BrowserExecutor;
+  refineOutput?: (
+    ai: GoogleGenAI,
+    userRequest: string,
+    rawOutput: string
+  ) => Promise<string>;
   browserApiKey?: string;
 }
 
@@ -57,6 +62,11 @@ type TranscriptFinalDeps = Readonly<{
   classify: (ai: GoogleGenAI, text: string) => Promise<IntentResult>;
   narrate: (session: Orchestratable, text: string, apiKey: string) => Promise<void>;
   createBrowserAdapter: (apiKey: string) => BrowserExecutor;
+  refineOutput: (
+    ai: GoogleGenAI,
+    userRequest: string,
+    rawOutput: string
+  ) => Promise<string>;
   browserApiKey: string;
 }>;
 
@@ -64,8 +74,133 @@ const defaultDeps: TranscriptFinalDeps = {
   classify: classifyIntent,
   narrate,
   createBrowserAdapter: (browserApiKey: string) => new BrowserAdapter(browserApiKey),
+  refineOutput: refineOutputWithGemini,
   browserApiKey: env.BROWSER_USE_API_KEY,
 };
+
+const MAX_CORE_NARRATION_LINES = 4;
+const MAX_CORE_NARRATION_CHARS = 420;
+const PROCESS_LINE_PATTERNS = [
+  /^step\s+\d+[:.-]?/i,
+  /^status[:\s]/i,
+  /^(creating|starting|running)\s+(browser|task|tool)\b/i,
+  /^(browser\s+task|task)\s+(started|finished|failed|stopped)\b/i,
+  /^(i|we)\s+(navigated|visited|went|opened|clicked|searched|reviewed|checked)\b/i,
+  /^(navigated|visited|opened|clicked|searched)\b/i,
+];
+const OUTPUT_REFINEMENT_SYSTEM_PROMPT = `You clean raw browser automation output for voice playback.
+Return ONLY the core information the user asked for.
+Requirements:
+- Keep the answer concise and factual.
+- Exclude process narration (steps, navigation logs, tool status, "I clicked", etc.).
+- Prefer direct answer format over explanation.
+- If the raw output includes numbered findings or options, keep only the most relevant items.
+- If there is an error, state it plainly in one short sentence.
+
+Respond with JSON only:
+{
+  "answer": "clean, concise final answer"
+}`;
+
+export function toCoreNarrationText(rawText: string): string {
+  const normalized = normalizeNarrationText(rawText);
+  if (!normalized) {
+    return "Task completed.";
+  }
+
+  const lines = normalized.split("\n");
+  const filteredLines = lines.filter((line) =>
+    PROCESS_LINE_PATTERNS.every((pattern) => !pattern.test(line))
+  );
+  const selectedLines = (filteredLines.length > 0 ? filteredLines : lines).slice(
+    0,
+    MAX_CORE_NARRATION_LINES
+  );
+
+  const joined = selectedLines.join("\n");
+  return truncateNarration(joined, MAX_CORE_NARRATION_CHARS);
+}
+
+export async function refineOutputWithGemini(
+  ai: GoogleGenAI,
+  userRequest: string,
+  rawOutput: string
+): Promise<string> {
+  const fallback = toCoreNarrationText(rawOutput);
+  const generateContent = ai?.models?.generateContent;
+
+  if (typeof generateContent !== "function") {
+    return fallback;
+  }
+
+  try {
+    const response = await generateContent({
+      model: "gemini-2.5-flash",
+      contents:
+        `${OUTPUT_REFINEMENT_SYSTEM_PROMPT}\n\n` +
+        `User request:\n${userRequest}\n\n` +
+        `Raw browser/tool output:\n${rawOutput}`,
+      config: { responseMimeType: "application/json" },
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+      return fallback;
+    }
+
+    let parsed: { answer?: unknown };
+    try {
+      parsed = JSON.parse(responseText) as { answer?: unknown };
+    } catch {
+      return fallback;
+    }
+
+    if (typeof parsed.answer !== "string") {
+      return fallback;
+    }
+
+    const normalized = normalizeNarrationText(parsed.answer);
+    if (!normalized) {
+      return fallback;
+    }
+
+    return toCoreNarrationText(normalized);
+  } catch (err) {
+    console.error("[Orchestrator] Output refinement failed:", err);
+    return fallback;
+  }
+}
+
+function normalizeNarrationText(text: string): string {
+  const strippedMarkdown = text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1 ($2)");
+
+  return strippedMarkdown
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function truncateNarration(text: string, maxChars: number): string {
+  if (text.length <= maxChars) {
+    return text;
+  }
+
+  const clipped = text.slice(0, maxChars);
+  const sentenceEnd = Math.max(
+    clipped.lastIndexOf(". "),
+    clipped.lastIndexOf("! "),
+    clipped.lastIndexOf("? ")
+  );
+  if (sentenceEnd >= Math.floor(maxChars * 0.55)) {
+    return clipped.slice(0, sentenceEnd + 1).trim();
+  }
+
+  return `${clipped.trimEnd()}...`;
+}
 
 function resolveDeps(maybeDeps: TranscriptFinalOverrideDeps | undefined): TranscriptFinalDeps {
   return {
@@ -73,6 +208,7 @@ function resolveDeps(maybeDeps: TranscriptFinalOverrideDeps | undefined): Transc
     narrate: maybeDeps?.narrate ?? defaultDeps.narrate,
     createBrowserAdapter:
       maybeDeps?.createBrowserAdapter ?? defaultDeps.createBrowserAdapter,
+    refineOutput: maybeDeps?.refineOutput ?? defaultDeps.refineOutput,
     browserApiKey: maybeDeps?.browserApiKey ?? defaultDeps.browserApiKey,
   };
 }
@@ -179,7 +315,8 @@ export async function handleTranscriptFinal(
       session.setBrowserAdapter(null);
     }
     session.setState("speaking");
-    await deps.narrate(session, output, apiKey);
+    const refinedOutput = await deps.refineOutput(ai, text, output);
+    await deps.narrate(session, refinedOutput, apiKey);
 
     session.setState("idle");
     session.send({ type: "done" });

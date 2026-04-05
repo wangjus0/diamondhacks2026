@@ -14,7 +14,7 @@ import type {
   SessionStatus,
 } from "../modules/session/session-types.js";
 import { handleTranscriptFinal } from "../orchestrator/orchestrator.js";
-import type { BrowserAdapter } from "../tools/browser/adapter.js";
+import { BrowserAdapter } from "../tools/browser/adapter.js";
 import { SttAdapter } from "../voice/stt.js";
 
 type SessionTurnState = Extract<ServerEvent, { type: "state" }>["state"];
@@ -51,6 +51,8 @@ export class Session {
   private hasFinalizedRun = false;
   private narrationSequence = 0;
   private browserAdapter: BrowserAdapter | null = null;
+  private browserProfileId: string | null = null;
+  private browserUseApiKeyOverride: string | null = null;
   private hasEnded = false;
   private isPersistenceDisabled = false;
 
@@ -133,7 +135,7 @@ export class Session {
 
     switch (event.type) {
       case "start_session":
-        this.onStartSession();
+        this.onStartSession(event.profileId, event.browserUseApiKey);
         break;
       case "audio_chunk":
         void this.onAudioChunk(event.data);
@@ -147,10 +149,12 @@ export class Session {
     }
   }
 
-  private onStartSession(): void {
+  private onStartSession(profileId?: string, browserUseApiKey?: string): void {
     console.log(`[session:${this.id}] Session started`);
     this.hasFinalizedRun = false;
     this.narrationSequence = 0;
+    this.browserProfileId = normalizeProfileId(profileId);
+    this.browserUseApiKeyOverride = normalizeBrowserUseApiKey(browserUseApiKey);
 
     this.persistNonBlocking(
       this.persistence.startSession({ sessionId: this.id }),
@@ -204,7 +208,16 @@ export class Session {
         this.ai,
         env.ELEVEN_LABS_API_KEY,
         transcript,
-        env.NAVIGATION_ALLOWLIST
+        env.NAVIGATION_ALLOWLIST,
+        {
+          createBrowserAdapter: () =>
+            new BrowserAdapter(
+              this.browserUseApiKeyOverride ?? env.BROWSER_USE_API_KEY,
+              {
+              profileId: this.browserProfileId,
+              }
+            ),
+        }
       );
     } else {
       this.setState("idle");
@@ -344,4 +357,32 @@ function isSupabaseMissingTableError(error: unknown): boolean {
     error.message.includes("PGRST205") ||
     error.message.includes("Could not find the table")
   );
+}
+
+function normalizeProfileId(raw: string | undefined): string | null {
+  if (!raw) {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function normalizeBrowserUseApiKey(raw: string | undefined): string | null {
+  if (!raw) {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  if (!/^bu_[A-Za-z0-9_-]{8,}$/i.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
 }
