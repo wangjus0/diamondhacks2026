@@ -57,7 +57,7 @@ export class BrowserAdapter {
     }
   }
 
-  private async runTask(
+  async runTask(
     task: string,
     callbacks: BrowserTaskCallbacks
   ): Promise<string> {

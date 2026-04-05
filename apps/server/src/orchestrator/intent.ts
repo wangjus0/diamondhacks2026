@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { IntentResult } from "@murmur/shared";
 
 const intentResultSchema = z.object({
-  intent: z.enum(["search", "form_fill_draft", "clarify"]),
+  intent: z.enum(["search", "form_fill_draft", "clarify", "web_extract", "multi_site_compare"]),
   confidence: z.number().min(0).max(1),
   query: z.string(),
   clarification: z.string().optional(),
@@ -14,6 +14,8 @@ Classify the user's speech into exactly ONE of these intents:
 
 - "search": The user wants to search for information on the web (e.g. "search for restaurants near me", "look up the weather", "find cheap flights to LA")
 - "form_fill_draft": The user wants to fill out a form on a website (e.g. "fill out the contact form", "sign up for the newsletter", "enter my shipping address"). This is draft only - never submit.
+- "web_extract": The user wants to read, extract, or summarize content from a specific webpage (e.g. "read this page", "summarize that article", "what does this site say about X")
+- "multi_site_compare": The user wants to compare information across multiple websites (e.g. "compare prices on Amazon vs Best Buy", "which site has better reviews for X", "compare X across sites")
 - "clarify": The intent is unclear or ambiguous and you need more information.
 
 Respond with JSON only:

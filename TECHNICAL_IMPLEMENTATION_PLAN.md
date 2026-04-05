@@ -136,27 +136,41 @@ Risk: Medium
 
 Introduce a reusable tool runtime that supports rapid capability expansion while preserving safety and observability.
 
-### Proposed New Core Modules
+### Core Modules (Implemented)
 
 - `apps/server/src/tools/core/tool-types.ts`
-  - `ToolDefinition`, `ToolContext`, `ToolResult`, `ToolExecutionEvent`
+  - `ToolDefinition`, `ToolContext`, `ToolResult`, `RiskClass`
 - `apps/server/src/tools/core/tool-registry.ts`
-  - register/discover tools and capability tags
+  - `registerTool()`, `getTool()`, `getToolsByTag()`, `getAllTools()`
 - `apps/server/src/tools/core/tool-runner.ts`
-  - standard lifecycle: validate -> policy-check -> execute -> emit telemetry
+  - standard lifecycle: resolve -> policy-check -> execute -> log
 - `apps/server/src/tools/core/tool-policy.ts`
-  - reusable centralized policy wrappers
+  - bridges tool system to existing `safety/policy.ts` via `evaluateToolPolicy()`
 - `apps/server/src/tools/core/tool-errors.ts`
-  - typed internal errors + user-safe surfaced messages
+  - `ToolNotFoundError`, `ToolPolicyBlockedError`, `ToolExecutionError`
+- `apps/server/src/tools/core/index.ts`
+  - barrel export for all core modules
 
-### Additional Tools to Add (Post-MVP)
+### Implemented Tools
 
-1. `web_extract` (read-only extraction/summarization)
-2. `multi_site_compare` (cross-page comparison tables)
-3. `calendar_draft` (draft event details, no final confirmation)
-4. `email_draft` (draft only, no send)
-5. `download_collect` (collect links/files metadata)
-6. `tabular_export_draft` (prepare CSV/JSON draft outputs)
+1. `web_extract` (read-only) — `apps/server/src/tools/browser/web-extract.ts`
+   - Navigates to a page and extracts/summarizes textual content
+   - Risk class: `read_only`
+   - Uses Browser Use API with custom extraction prompt
+   - Supports cancellation via `AbortSignal`
+
+2. `multi_site_compare` (read-only) — `apps/server/src/tools/browser/multi-site-compare.ts`
+   - Visits multiple sites and collects structured comparison data
+   - Risk class: `read_only`
+   - Uses Browser Use API with comparison prompt
+   - Supports cancellation via `AbortSignal`
+
+### Additional Tools to Add (Future)
+
+1. `calendar_draft` (draft event details, no final confirmation)
+2. `email_draft` (draft only, no send)
+3. `download_collect` (collect links/files metadata)
+4. `tabular_export_draft` (prepare CSV/JSON draft outputs)
 
 ### Tool Safety Model
 
@@ -217,10 +231,11 @@ Enforcement rules:
 
 - End-to-end voice -> browser -> narration is reliable.
 - MVP intents (`search`, `form_fill_draft`) complete on demo domains.
+- Post-MVP intents (`web_extract`, `multi_site_compare`) route through tool runtime.
 - Interrupt cancels active acting/speaking within the same turn.
 - Dangerous actions are blocked before execution.
 - Client consistently reflects transcript, action timeline, and state.
-- Tool runtime can add at least two post-MVP tools with no orchestrator rewrite.
+- Tool runtime supports adding new tools via `registerTool()` with no orchestrator rewrite.
 
 ## Suggested Delivery Sequence
 
