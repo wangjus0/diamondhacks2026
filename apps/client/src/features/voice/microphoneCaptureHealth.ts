@@ -1,4 +1,4 @@
-export const MICROPHONE_FRAME_WATCHDOG_MS = 1800;
+export const MICROPHONE_FRAME_WATCHDOG_MS = 3000;
 
 interface SilentCaptureInput {
   elapsedMs: number;

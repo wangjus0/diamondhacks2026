@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "../../hooks/useSession";
 import { useSessionStore } from "../../store/session";
 import { useAudioPlayer } from "../narration/useAudioPlayer";
@@ -17,6 +17,7 @@ export function VoicePopover() {
   const error = useSessionStore((s) => s.error);
   const setError = useSessionStore((s) => s.setError);
   const [barScales, setBarScales] = useState<number[]>(BASE_BAR_SCALE);
+  const isRecordingRef = useRef(false);
 
   const micDisabled = BUSY_TURN_STATES.has(turnState);
 
@@ -44,6 +45,10 @@ export function VoicePopover() {
       : micDisabled
         ? "Assistant is busy. Try again in a moment."
         : "Press Space to start listening";
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   const toggleRecording = useCallback(async () => {
     if (isRecording) {
@@ -124,13 +129,13 @@ export function VoicePopover() {
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      if (isRecording) {
+      if (isRecordingRef.current) {
         stopRecording();
       }
       setBarScales(BASE_BAR_SCALE);
       audioPlayer.stop();
     };
-  }, [audioPlayer, handleKeyDown, isRecording, stopRecording]);
+  }, [audioPlayer, handleKeyDown, stopRecording]);
 
   return (
     <div className="voice-popover-screen">

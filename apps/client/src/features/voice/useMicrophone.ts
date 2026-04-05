@@ -47,6 +47,8 @@ export function useMicrophone({
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const captureStartedAtMsRef = useRef<number | null>(null);
   const hasReceivedAudioFrameRef = useRef(false);
+  const hasGrantedSilentCaptureGraceRef = useRef(false);
+  const isCaptureActiveRef = useRef(false);
   const captureWatchdogTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearCaptureWatchdog = useCallback(() => {
@@ -58,6 +60,12 @@ export function useMicrophone({
 
   const stopActiveRecording = useCallback(
     (notifyStop: boolean) => {
+      const wasActive = isCaptureActiveRef.current;
+      if (!wasActive) {
+        return;
+      }
+
+      isCaptureActiveRef.current = false;
       clearCaptureWatchdog();
 
       processorRef.current?.disconnect();
@@ -69,16 +77,48 @@ export function useMicrophone({
       streamRef.current = null;
       captureStartedAtMsRef.current = null;
       hasReceivedAudioFrameRef.current = false;
+      hasGrantedSilentCaptureGraceRef.current = false;
 
       setIsRecording(false);
       onAudioLevel?.(0);
 
-      if (notifyStop) {
+      if (notifyStop && wasActive) {
         onStop();
       }
     },
     [clearCaptureWatchdog, onAudioLevel, onStop]
   );
+
+  const scheduleCaptureWatchdog = useCallback(() => {
+    clearCaptureWatchdog();
+
+    captureWatchdogTimeoutRef.current = setTimeout(() => {
+      const startedAtMs = captureStartedAtMsRef.current;
+      if (startedAtMs === null) {
+        return;
+      }
+
+      const elapsedMs = Date.now() - startedAtMs;
+      const shouldFailCapture = shouldTreatCaptureAsSilent({
+        elapsedMs,
+        hasReceivedAudioFrame: hasReceivedAudioFrameRef.current,
+      });
+      if (!shouldFailCapture) {
+        return;
+      }
+
+      // Give capture one extra watchdog window before force-stopping.
+      if (!hasGrantedSilentCaptureGraceRef.current) {
+        hasGrantedSilentCaptureGraceRef.current = true;
+        captureStartedAtMsRef.current = Date.now();
+        scheduleCaptureWatchdog();
+        return;
+      }
+
+      onError?.(getSilentCaptureErrorMessage());
+      stopActiveRecording(true);
+    }, MICROPHONE_FRAME_WATCHDOG_MS);
+  }, [clearCaptureWatchdog, onError, stopActiveRecording]);
 
   const startRecording = useCallback(async (): Promise<boolean> => {
     const desktopPermissions = window.desktop?.permissions;
@@ -137,41 +177,27 @@ export function useMicrophone({
       processorRef.current = processor;
       captureStartedAtMsRef.current = Date.now();
       hasReceivedAudioFrameRef.current = false;
+      hasGrantedSilentCaptureGraceRef.current = false;
+      isCaptureActiveRef.current = true;
       setIsRecording(true);
       onAudioLevel?.(0);
 
-      clearCaptureWatchdog();
-      captureWatchdogTimeoutRef.current = setTimeout(() => {
-        const startedAtMs = captureStartedAtMsRef.current;
-        if (startedAtMs === null) {
-          return;
-        }
-
-        const elapsedMs = Date.now() - startedAtMs;
-        const shouldFailCapture = shouldTreatCaptureAsSilent({
-          elapsedMs,
-          hasReceivedAudioFrame: hasReceivedAudioFrameRef.current,
-        });
-        if (!shouldFailCapture) {
-          return;
-        }
-
-        onError?.(getSilentCaptureErrorMessage());
-        stopActiveRecording(true);
-      }, MICROPHONE_FRAME_WATCHDOG_MS);
+      scheduleCaptureWatchdog();
 
       return true;
     } catch (error) {
       clearCaptureWatchdog();
       captureStartedAtMsRef.current = null;
       hasReceivedAudioFrameRef.current = false;
+      hasGrantedSilentCaptureGraceRef.current = false;
+      isCaptureActiveRef.current = false;
       processor?.disconnect();
       await ctx?.close();
       stream?.getTracks().forEach((track) => track.stop());
       onError?.(getMicrophoneErrorMessage(error));
       return false;
     }
-  }, [clearCaptureWatchdog, onAudioChunk, onAudioLevel, onError, stopActiveRecording]);
+  }, [clearCaptureWatchdog, onAudioChunk, onAudioLevel, onError, scheduleCaptureWatchdog]);
 
   const stopRecording = useCallback(() => {
     stopActiveRecording(true);
