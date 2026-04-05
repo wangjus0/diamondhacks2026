@@ -9,6 +9,7 @@ import {
   logPolicyBlock,
 } from "../safety/policy.js";
 import { classifyIntent } from "./intent.js";
+import { generateToolPlan } from "./tool-guide.js";
 import { runTool } from "../tools/core/tool-runner.js";
 import { ToolPolicyBlockedError } from "../tools/core/tool-errors.js";
 import "../tools/browser/web-extract.js";
@@ -262,11 +263,24 @@ export async function handleTranscriptFinal(
       return;
     }
 
+    // Tool Guide: determine optimal execution strategy
+    const toolPlan = await generateToolPlan(ai, text, result.intent);
+    console.log(`[ToolGuide] Strategy: ${toolPlan.strategy}, integrations: [${toolPlan.integrations.join(", ")}]`);
+    session.send({
+      type: "action_status",
+      message: toolPlan.integrations.length
+        ? `Using ${toolPlan.integrations.join(", ")} → ${toolPlan.reasoning}`
+        : toolPlan.reasoning,
+    });
+
     session.setState("acting");
 
     const statusCb = {
       onStatus: (msg: string) => session.send({ type: "action_status", message: msg }),
     };
+
+    // Use enhanced prompt from tool guide when available
+    const taskQuery = toolPlan.enhanced_prompt || text;
 
     let output: string;
 
@@ -275,7 +289,7 @@ export async function handleTranscriptFinal(
         const toolResult = await runTool(
           result.intent,
           {
-            query: result.query,
+            query: taskQuery,
             browserApiKey: deps.browserApiKey,
             onStatus: statusCb.onStatus,
           },
@@ -301,9 +315,9 @@ export async function handleTranscriptFinal(
 
       try {
         if (result.intent === "search") {
-          output = await browser.runSearch(result.query, statusCb);
+          output = await browser.runSearch(taskQuery, statusCb);
         } else {
-          output = await browser.runFormFillDraft(result.query, statusCb, {
+          output = await browser.runFormFillDraft(taskQuery, statusCb, {
             allowSubmit: env.ALLOW_FINAL_FORM_SUBMISSION,
           });
         }
