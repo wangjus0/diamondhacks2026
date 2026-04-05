@@ -17,10 +17,12 @@ import {
 test("search task prompt stays focused on read-only retrieval", () => {
   const prompt = buildSearchTaskPrompt("best tacos in san jose");
 
-  assert.match(prompt, /google\.com/i);
-  assert.match(prompt, /top 5 result titles and URLs/i);
-  assert.doesNotMatch(prompt, /\bsubmit\b/i);
-  assert.doesNotMatch(prompt, /\bcheckout\b/i);
+  assert.match(prompt, /use concise keyword searches/i);
+  assert.match(prompt, /do not paste the full user utterance verbatim/i);
+  assert.match(prompt, /supporting points and source URLs/i);
+  assert.doesNotMatch(prompt, /top\s*5/i);
+  assert.match(prompt, /do not .*submit/i);
+  assert.match(prompt, /do not .*checkout/i);
 });
 
 test("integration-first search prompt avoids forced google search", () => {

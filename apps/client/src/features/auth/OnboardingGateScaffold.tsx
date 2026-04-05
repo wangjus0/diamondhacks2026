@@ -10,6 +10,8 @@ import { resolveServerHttpOrigin } from "../../lib/server-origin";
 import { getSupabaseClient } from "../../lib/supabase";
 import { useAuth } from "./AuthProvider";
 import {
+  buildProfileCustomFieldsRecord,
+  buildProfileMarkdown,
   createDefaultOnboardingData,
   createPayload,
   deriveCurrentStep,
@@ -17,6 +19,7 @@ import {
   validateStep,
   type MicrophoneAccessStatus,
   type OnboardingFormData,
+  type ProfileCustomField,
   type StepErrors,
   type StepKey,
 } from "./onboardingSchema";
@@ -41,8 +44,13 @@ type StepMeta = {
 const STEP_META: StepMeta[] = [
   {
     key: "account",
-    title: "Your name",
-    description: "Tell us what to call you.",
+    title: "Display name",
+    description: "Choose what Murmur should call you in the app.",
+  },
+  {
+    key: "profile",
+    title: "Your profile",
+    description: "Add profile details and any custom key/value info you want Murmur to remember.",
   },
   {
     key: "permissions",
@@ -57,6 +65,7 @@ const SAFE_PERMISSIONS_STEP_INDEX = PERMISSIONS_STEP_INDEX >= 0 ? PERMISSIONS_ST
 const INITIAL_STEP_ERRORS: Record<StepKey, StepErrors> = {
   permissions: {},
   account: {},
+  profile: {},
   workflow: {},
   preferences: {},
 };
@@ -85,6 +94,40 @@ const MICROPHONE_STATUS_LABEL: Record<MicrophoneAccessStatus, string> = {
   unknown: "Unknown",
 };
 
+function validateCustomProfileFields(customFields: ProfileCustomField[]): string | null {
+  const seenKeys = new Set<string>();
+
+  for (const entry of customFields) {
+    const key = entry.key.trim();
+    const value = entry.value.trim();
+
+    if (key.length === 0 && value.length === 0) {
+      continue;
+    }
+
+    if (key.length === 0 || value.length === 0) {
+      return "Each custom field needs both a key and a value.";
+    }
+
+    if (key.length > 80) {
+      return "Custom field keys must be 80 characters or fewer.";
+    }
+
+    if (value.length > 280) {
+      return "Custom field values must be 280 characters or fewer.";
+    }
+
+    const dedupeKey = key.toLowerCase();
+    if (seenKeys.has(dedupeKey)) {
+      return "Custom field keys must be unique.";
+    }
+
+    seenKeys.add(dedupeKey);
+  }
+
+  return null;
+}
+
 function AccountStep(props: {
   data: OnboardingFormData["account"];
   errors: StepErrors;
@@ -104,6 +147,161 @@ function AccountStep(props: {
         />
         <InlineError id="display-name-error" message={props.errors.displayName} />
       </label>
+    </div>
+  );
+}
+
+function ProfileStep(props: {
+  data: OnboardingFormData["profile"];
+  errors: StepErrors;
+  onFieldChange: (
+    field: Exclude<keyof OnboardingFormData["profile"], "customFields">,
+    value: string,
+  ) => void;
+  onCustomFieldChange: (index: number, field: "key" | "value", value: string) => void;
+  onAddCustomField: () => void;
+  onRemoveCustomField: (index: number) => void;
+}) {
+  return (
+    <div className="onboarding-fields">
+      <label className="field">
+        <span className="field-label">Full name</span>
+        <input
+          type="text"
+          value={props.data.fullName}
+          onChange={(event) => props.onFieldChange("fullName", event.target.value)}
+          placeholder="Alex Rivera"
+          aria-invalid={Boolean(props.errors.fullName)}
+          aria-describedby={props.errors.fullName ? "profile-full-name-error" : undefined}
+        />
+        <InlineError id="profile-full-name-error" message={props.errors.fullName} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Date of birth</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={props.data.dateOfBirth}
+          onChange={(event) => props.onFieldChange("dateOfBirth", event.target.value)}
+          placeholder="mm/dd/yyyy"
+          aria-invalid={Boolean(props.errors.dateOfBirth)}
+          aria-describedby={props.errors.dateOfBirth ? "profile-dob-error" : undefined}
+        />
+        <InlineError id="profile-dob-error" message={props.errors.dateOfBirth} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Major</span>
+        <input
+          type="text"
+          value={props.data.major}
+          onChange={(event) => props.onFieldChange("major", event.target.value)}
+          placeholder="Computer Science"
+          aria-invalid={Boolean(props.errors.major)}
+          aria-describedby={props.errors.major ? "profile-major-error" : undefined}
+        />
+        <InlineError id="profile-major-error" message={props.errors.major} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Occupation</span>
+        <input
+          type="text"
+          value={props.data.occupation}
+          onChange={(event) => props.onFieldChange("occupation", event.target.value)}
+          placeholder="Software Engineer"
+          aria-invalid={Boolean(props.errors.occupation)}
+          aria-describedby={props.errors.occupation ? "profile-occupation-error" : undefined}
+        />
+        <InlineError id="profile-occupation-error" message={props.errors.occupation} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Graduation</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={props.data.graduationYear}
+          onChange={(event) => props.onFieldChange("graduationYear", event.target.value)}
+          placeholder="mm/yyyy"
+          aria-invalid={Boolean(props.errors.graduationYear)}
+          aria-describedby={props.errors.graduationYear ? "profile-grad-year-error" : undefined}
+        />
+        <InlineError id="profile-grad-year-error" message={props.errors.graduationYear} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">ZIP code</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={props.data.zipCode}
+          onChange={(event) => props.onFieldChange("zipCode", event.target.value)}
+          placeholder="12345"
+          aria-invalid={Boolean(props.errors.zipCode)}
+          aria-describedby={props.errors.zipCode ? "profile-zip-error" : undefined}
+        />
+        <InlineError id="profile-zip-error" message={props.errors.zipCode} />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Phone number</span>
+        <input
+          type="text"
+          value={props.data.phoneNumber}
+          onChange={(event) => props.onFieldChange("phoneNumber", event.target.value)}
+          placeholder="(123)-456-7890"
+          aria-invalid={Boolean(props.errors.phoneNumber)}
+          aria-describedby={props.errors.phoneNumber ? "profile-phone-error" : undefined}
+        />
+        <InlineError id="profile-phone-error" message={props.errors.phoneNumber} />
+      </label>
+
+      <div className="field">
+        <span className="field-label">Custom fields</span>
+        <div className="onboarding-fields profile-custom-field-list">
+          {props.data.customFields.length === 0 ? (
+            <p className="status-note">No custom fields yet.</p>
+          ) : (
+            props.data.customFields.map((entry, index) => (
+              <div key={`profile-custom-${index}`} className="profile-custom-field-row">
+                <input
+                  type="text"
+                  value={entry.key}
+                  onChange={(event) => props.onCustomFieldChange(index, "key", event.target.value)}
+                  placeholder="Key (e.g., pronouns)"
+                />
+                <input
+                  type="text"
+                  value={entry.value}
+                  onChange={(event) => props.onCustomFieldChange(index, "value", event.target.value)}
+                  placeholder="Value (e.g., she/her)"
+                />
+                <button
+                  type="button"
+                  className="button button-secondary profile-custom-field-remove"
+                  onClick={() => {
+                    props.onRemoveCustomField(index);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="profile-custom-field-actions">
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={props.onAddCustomField}
+          >
+            Add custom field
+          </button>
+        </div>
+        <InlineError id="profile-custom-fields-error" message={props.errors.customFields} />
+      </div>
     </div>
   );
 }
@@ -645,6 +843,51 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
       throw new Error(error.message);
     }
 
+    const profileName =
+      formData.profile.fullName.trim().length > 0
+        ? formData.profile.fullName.trim()
+        : formData.account.displayName.trim();
+    const profileMarkdown = buildProfileMarkdown(formData, user.email ?? null);
+    const profileData = {
+      fullName: formData.profile.fullName.trim(),
+      dateOfBirth: formData.profile.dateOfBirth.trim(),
+      major: formData.profile.major.trim(),
+      occupation: formData.profile.occupation.trim(),
+      graduationYear: formData.profile.graduationYear.trim(),
+      zipCode: formData.profile.zipCode.trim(),
+      phoneNumber: formData.profile.phoneNumber.trim(),
+      customFields: buildProfileCustomFieldsRecord(formData.profile.customFields),
+    };
+
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        name: profileName.length > 0 ? profileName : null,
+        profile_markdown: profileMarkdown,
+        profile_data: profileData,
+      },
+      {
+        onConflict: "id",
+      },
+    );
+    if (profileError) {
+      const { error: fallbackError } = await supabase.from("profiles").upsert(
+        {
+          id: user.id,
+          email: user.email ?? null,
+          name: profileName.length > 0 ? profileName : null,
+        },
+        {
+          onConflict: "id",
+        },
+      );
+
+      if (fallbackError) {
+        throw new Error(fallbackError.message);
+      }
+    }
+
     await persistBrowserProfileId(
       normalizeBrowserProfileId(formData.permissions.browserProfileId)
     );
@@ -667,6 +910,21 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
       }));
 
       return Object.keys(permissionValidation).length === 0 && Object.keys(preferenceErrors).length === 0;
+    }
+
+    if (activeStep.key === "profile") {
+      const profileValidation = validateStep("profile", formData);
+      const customFieldError = validateCustomProfileFields(formData.profile.customFields);
+      if (customFieldError) {
+        profileValidation.customFields = customFieldError;
+      }
+
+      setStepErrors((previous) => ({
+        ...previous,
+        profile: profileValidation,
+      }));
+
+      return Object.keys(profileValidation).length === 0;
     }
 
     const validation = validateStep(activeStep.key, formData);
@@ -707,7 +965,7 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
   const updateStepField = <TStep extends StepKey, TField extends keyof OnboardingFormData[TStep]>(
     step: TStep,
     field: TField,
-    value: string,
+    value: OnboardingFormData[TStep][TField],
   ) => {
     setFormData((previous) => ({
       ...previous,
@@ -726,6 +984,33 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
         [step]: remainingStepErrors,
       };
     });
+  };
+
+  const addCustomProfileField = () => {
+    updateStepField("profile", "customFields", [...formData.profile.customFields, { key: "", value: "" }]);
+  };
+
+  const removeCustomProfileField = (index: number) => {
+    updateStepField(
+      "profile",
+      "customFields",
+      formData.profile.customFields.filter((_, currentIndex) => currentIndex !== index),
+    );
+  };
+
+  const updateCustomProfileField = (index: number, field: "key" | "value", value: string) => {
+    updateStepField(
+      "profile",
+      "customFields",
+      formData.profile.customFields.map((entry, currentIndex) =>
+        currentIndex === index
+          ? {
+              ...entry,
+              [field]: value,
+            }
+          : entry,
+      ),
+    );
   };
 
   const handleComplete = async () => {
@@ -785,6 +1070,19 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
                 onDisplayNameChange={(value) => {
                   updateStepField("account", "displayName", value);
                 }}
+              />
+            )}
+
+            {activeStep.key === "profile" && (
+              <ProfileStep
+                data={formData.profile}
+                errors={stepErrors.profile}
+                onFieldChange={(field, value) => {
+                  updateStepField("profile", field, value);
+                }}
+                onCustomFieldChange={updateCustomProfileField}
+                onAddCustomField={addCustomProfileField}
+                onRemoveCustomField={removeCustomProfileField}
               />
             )}
 

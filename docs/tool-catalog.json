@@ -1,0 +1,716 @@
+{
+  "schema": "tool_router_v1",
+  "fields": ["tool_name", "when_to_use", "example_queries"],
+  "tools": [
+    {
+      "tool_name": "Gmail",
+      "when_to_use": "Use Gmail to read, send, reply to, label, and search email conversations.",
+      "example_queries": ["Draft and send a follow-up email to Alex about tomorrow's demo."]
+    },
+    {
+      "tool_name": "Google Calendar",
+      "when_to_use": "Use Google Calendar to create, update, and review events and availability.",
+      "example_queries": ["Schedule a 30-minute check-in with Priya on Friday at 2 PM."]
+    },
+    {
+      "tool_name": "Google Docs",
+      "when_to_use": "Use Google Docs to create and edit collaborative text documents.",
+      "example_queries": ["Create a project brief doc and add today's meeting notes."]
+    },
+    {
+      "tool_name": "Google Drive",
+      "when_to_use": "Use Google Drive to store, organize, and share files and folders.",
+      "example_queries": ["Find the Q1 planning deck and share it with marketing."]
+    },
+    {
+      "tool_name": "Notion",
+      "when_to_use": "Use Notion to manage notes, docs, wikis, and structured workspace data.",
+      "example_queries": ["Add a task to the Product Roadmap database for onboarding improvements."]
+    },
+    {
+      "tool_name": "Google Sheets",
+      "when_to_use": "Use Google Sheets to manage tabular data, formulas, and reporting.",
+      "example_queries": ["Update the weekly revenue sheet with the latest numbers."]
+    },
+    {
+      "tool_name": "Slack",
+      "when_to_use": "Use Slack to post messages, share updates, and collaborate in channels or DMs.",
+      "example_queries": ["Post a release update in #engineering and tag the team."]
+    },
+    {
+      "tool_name": "Google Search Console",
+      "when_to_use": "Use Google Search Console to monitor SEO visibility, indexing, and query performance.",
+      "example_queries": ["Show top search queries that dropped in clicks this month."]
+    },
+    {
+      "tool_name": "Outlook",
+      "when_to_use": "Use Outlook to manage email, calendar events, and contacts in Microsoft 365.",
+      "example_queries": ["Send a calendar invite for the monthly finance review."]
+    },
+    {
+      "tool_name": "Airtable",
+      "when_to_use": "Use Airtable to manage structured records in relational table-style bases.",
+      "example_queries": ["Create a new lead record in the Sales CRM base."]
+    },
+    {
+      "tool_name": "HubSpot",
+      "when_to_use": "Use HubSpot to manage contacts, companies, deals, and sales activity.",
+      "example_queries": ["Move Deal 482 to Negotiation and log today's call notes."]
+    },
+    {
+      "tool_name": "YouTube",
+      "when_to_use": "Use YouTube to upload, edit, and manage channel video content.",
+      "example_queries": ["Update the title and description for our latest product video."]
+    },
+    {
+      "tool_name": "Google Analytics Admin",
+      "when_to_use": "Use Google Analytics Admin to manage GA accounts, properties, and access controls.",
+      "example_queries": ["Grant read access to analyst@company.com on the GA4 property."]
+    },
+    {
+      "tool_name": "Google Analytics Data",
+      "when_to_use": "Use Google Analytics Data to query traffic, engagement, and conversion metrics.",
+      "example_queries": ["Show sessions and conversions by channel for the last 30 days."]
+    },
+    {
+      "tool_name": "Jira",
+      "when_to_use": "Use Jira to create, assign, and track issues, bugs, and sprint work.",
+      "example_queries": ["Create a bug ticket for checkout timeout and assign it to backend."]
+    },
+    {
+      "tool_name": "Google Ads",
+      "when_to_use": "Use Google Ads to create, manage, and optimize online ad campaigns.",
+      "example_queries": ["Pause underperforming keywords in the Brand campaign."]
+    },
+    {
+      "tool_name": "Calendly",
+      "when_to_use": "Use Calendly to configure booking links, availability, and scheduled meetings.",
+      "example_queries": ["Create a 45-minute discovery call event type."]
+    },
+    {
+      "tool_name": "Google Slides",
+      "when_to_use": "Use Google Slides to create and edit presentation decks.",
+      "example_queries": ["Add a slide summarizing Q2 goals and KPIs."]
+    },
+    {
+      "tool_name": "QuickBooks",
+      "when_to_use": "Use QuickBooks for accounting tasks like invoices, expenses, and reconciliation.",
+      "example_queries": ["Create and send invoice #1042 for Acme Corp."]
+    },
+    {
+      "tool_name": "Apollo",
+      "when_to_use": "Use Apollo to find prospects, enrich lead data, and support outbound workflows.",
+      "example_queries": ["Find VP Marketing contacts at SaaS companies with 50-200 employees."]
+    },
+    {
+      "tool_name": "Trello",
+      "when_to_use": "Use Trello to organize project work in boards, lists, and cards.",
+      "example_queries": ["Move the Homepage Redesign card to In Review."]
+    },
+    {
+      "tool_name": "Google Meet",
+      "when_to_use": "Use Google Meet to create and share virtual meeting links.",
+      "example_queries": ["Generate a Meet link for tomorrow's standup."]
+    },
+    {
+      "tool_name": "Google Forms",
+      "when_to_use": "Use Google Forms to build surveys, forms, and collect responses.",
+      "example_queries": ["Create a customer feedback form with 10 questions."]
+    },
+    {
+      "tool_name": "Salesforce",
+      "when_to_use": "Use Salesforce to manage CRM records, opportunities, and customer activity.",
+      "example_queries": ["Update opportunity stage for ACME renewal to Proposal."]
+    },
+    {
+      "tool_name": "Stripe",
+      "when_to_use": "Use Stripe to manage payments, subscriptions, invoices, and refunds.",
+      "example_queries": ["Refund the latest charge for customer cus_123."]
+    },
+    {
+      "tool_name": "WhatsApp Business",
+      "when_to_use": "Use WhatsApp Business to message customers from a business account.",
+      "example_queries": ["Send an order shipped update to +1-555-123-4567."]
+    },
+    {
+      "tool_name": "Asana",
+      "when_to_use": "Use Asana to manage project tasks, owners, priorities, and due dates.",
+      "example_queries": ["Create a legal review task due next Wednesday."]
+    },
+    {
+      "tool_name": "ClickUp",
+      "when_to_use": "Use ClickUp to manage tasks, docs, goals, and team workspaces.",
+      "example_queries": ["Create a sprint task for API retry handling."]
+    },
+    {
+      "tool_name": "Pipedrive",
+      "when_to_use": "Use Pipedrive to manage sales pipelines, deals, and follow-up activities.",
+      "example_queries": ["Add a follow-up activity for Deal 987 on Monday."]
+    },
+    {
+      "tool_name": "Klaviyo",
+      "when_to_use": "Use Klaviyo for personalized email/SMS campaigns and segmentation.",
+      "example_queries": ["Launch a cart abandonment flow for US customers."]
+    },
+    {
+      "tool_name": "Google Play",
+      "when_to_use": "Use Google Play to manage Android app listings and release metadata.",
+      "example_queries": ["Update release notes for app version 2.3.1."]
+    },
+    {
+      "tool_name": "Monday",
+      "when_to_use": "Use Monday to plan and track team work using boards and automations.",
+      "example_queries": ["Add a new item to the Product Launch board."]
+    },
+    {
+      "tool_name": "Xero",
+      "when_to_use": "Use Xero for cloud accounting, invoicing, and bookkeeping workflows.",
+      "example_queries": ["Create a draft invoice for monthly retainer services."]
+    },
+    {
+      "tool_name": "Google Workspace Admin",
+      "when_to_use": "Use Google Workspace Admin to manage users, groups, devices, and org settings.",
+      "example_queries": ["Suspend a user account and transfer Drive ownership."]
+    },
+    {
+      "tool_name": "Typeform",
+      "when_to_use": "Use Typeform to create interactive forms, surveys, and quizzes.",
+      "example_queries": ["Build a lead qualification form with conditional logic."]
+    },
+    {
+      "tool_name": "Acuity Scheduling",
+      "when_to_use": "Use Acuity Scheduling to manage appointment booking and availability.",
+      "example_queries": ["Set Tuesday afternoon availability for consultations."]
+    },
+    {
+      "tool_name": "ActiveCampaign",
+      "when_to_use": "Use ActiveCampaign for email marketing, CRM, and automation journeys.",
+      "example_queries": ["Add new trial users to a 7-day onboarding sequence."]
+    },
+    {
+      "tool_name": "Attio",
+      "when_to_use": "Use Attio to manage CRM records, relationships, and pipeline activity.",
+      "example_queries": ["Create a company record and link key contacts."]
+    },
+    {
+      "tool_name": "Basecamp",
+      "when_to_use": "Use Basecamp for project coordination, messages, and team to-dos.",
+      "example_queries": ["Post today's status update in the client project."]
+    },
+    {
+      "tool_name": "Beehiiv",
+      "when_to_use": "Use Beehiiv to publish newsletters and manage subscriber growth.",
+      "example_queries": ["Schedule this week's newsletter for Thursday morning."]
+    },
+    {
+      "tool_name": "Baserow",
+      "when_to_use": "Use Baserow to create and manage no-code databases and tables.",
+      "example_queries": ["Insert a new row into the inventory table."]
+    },
+    {
+      "tool_name": "Box",
+      "when_to_use": "Use Box to store, secure, and share business files.",
+      "example_queries": ["Share the contract folder with legal@company.com."]
+    },
+    {
+      "tool_name": "Brave Search",
+      "when_to_use": "Use Brave Search for privacy-focused web search queries.",
+      "example_queries": ["Search for recent announcements on SOC 2 changes."]
+    },
+    {
+      "tool_name": "Brevo",
+      "when_to_use": "Use Brevo for email, SMS, and automation marketing workflows.",
+      "example_queries": ["Send a win-back campaign to inactive subscribers."]
+    },
+    {
+      "tool_name": "Buffer",
+      "when_to_use": "Use Buffer to schedule and publish social media posts.",
+      "example_queries": ["Queue LinkedIn posts for next week."]
+    },
+    {
+      "tool_name": "Cal.com",
+      "when_to_use": "Use Cal.com to set scheduling availability and booking pages.",
+      "example_queries": ["Create a booking link for 30-minute customer calls."]
+    },
+    {
+      "tool_name": "CallRail",
+      "when_to_use": "Use CallRail to track calls/forms and attribute marketing performance.",
+      "example_queries": ["Show call volume by campaign for last month."]
+    },
+    {
+      "tool_name": "Chargebee",
+      "when_to_use": "Use Chargebee to manage subscriptions, billing cycles, and invoices.",
+      "example_queries": ["Upgrade customer subscription from Starter to Pro."]
+    },
+    {
+      "tool_name": "ClickFunnels",
+      "when_to_use": "Use ClickFunnels to build and optimize sales/marketing funnels.",
+      "example_queries": ["Create a lead capture page for the webinar funnel."]
+    },
+    {
+      "tool_name": "ClickSend",
+      "when_to_use": "Use ClickSend to send SMS, email, and voice communication at scale.",
+      "example_queries": ["Send SMS reminders to tomorrow's appointments."]
+    },
+    {
+      "tool_name": "Constant Contact",
+      "when_to_use": "Use Constant Contact to create email campaigns and manage audiences.",
+      "example_queries": ["Send a monthly newsletter to VIP contacts."]
+    },
+    {
+      "tool_name": "Clio",
+      "when_to_use": "Use Clio to manage legal matters, clients, and legal billing.",
+      "example_queries": ["Log a billable time entry for Matter 203."]
+    },
+    {
+      "tool_name": "Clockify",
+      "when_to_use": "Use Clockify to track time, timesheets, and project hours.",
+      "example_queries": ["Start a timer for frontend bug fixes."]
+    },
+    {
+      "tool_name": "Coda",
+      "when_to_use": "Use Coda to create collaborative docs with tables and workflows.",
+      "example_queries": ["Create a planning doc with a task table for Q3."]
+    },
+    {
+      "tool_name": "Cognito Forms",
+      "when_to_use": "Use Cognito Forms to build forms with logic and optional payments.",
+      "example_queries": ["Create an intake form that collects a booking fee."]
+    },
+    {
+      "tool_name": "CompanyCam",
+      "when_to_use": "Use CompanyCam to organize field photos and job-site documentation.",
+      "example_queries": ["Upload today's site photos to Project 421."]
+    },
+    {
+      "tool_name": "Confluence",
+      "when_to_use": "Use Confluence to create and organize team documentation and knowledge pages.",
+      "example_queries": ["Create a runbook page for incident response."]
+    },
+    {
+      "tool_name": "Dropbox",
+      "when_to_use": "Use Dropbox to store, sync, and share files.",
+      "example_queries": ["Upload the final proposal and share a view link."]
+    },
+    {
+      "tool_name": "Dropbox Business",
+      "when_to_use": "Use Dropbox Business for team-managed Dropbox storage and permissions.",
+      "example_queries": ["Grant the sales team access to the Q2 assets folder."]
+    },
+    {
+      "tool_name": "ElevenLabs",
+      "when_to_use": "Use ElevenLabs to generate realistic AI speech and voice audio outputs.",
+      "example_queries": ["Generate a voiceover for this product announcement."]
+    },
+    {
+      "tool_name": "Exa",
+      "when_to_use": "Use Exa for AI-optimized semantic web search and source retrieval.",
+      "example_queries": ["Find trustworthy sources about RAG evaluation best practices."]
+    },
+    {
+      "tool_name": "Eventbrite",
+      "when_to_use": "Use Eventbrite to create events and manage ticketing/registration.",
+      "example_queries": ["Publish a webinar event and enable free registration."]
+    },
+    {
+      "tool_name": "fal",
+      "when_to_use": "Use fal to run serverless AI model inference tasks.",
+      "example_queries": ["Run image upscaling on these product photos."]
+    },
+    {
+      "tool_name": "Fathom",
+      "when_to_use": "Use Fathom to record, transcribe, and summarize meetings.",
+      "example_queries": ["Summarize action items from today's customer call."]
+    },
+    {
+      "tool_name": "Firecrawl",
+      "when_to_use": "Use Firecrawl to crawl/scrape web pages into LLM-ready text.",
+      "example_queries": ["Extract content from these docs URLs for summarization."]
+    },
+    {
+      "tool_name": "Fireflies",
+      "when_to_use": "Use Fireflies to transcribe meetings and generate insights.",
+      "example_queries": ["Get key decisions from yesterday's team sync."]
+    },
+    {
+      "tool_name": "Firebase",
+      "when_to_use": "Use Firebase for app backend services like auth, data, and hosting.",
+      "example_queries": ["Create a Firestore document for this new user profile."]
+    },
+    {
+      "tool_name": "Front",
+      "when_to_use": "Use Front to manage shared inboxes and team customer communications.",
+      "example_queries": ["Assign this support thread to the billing team."]
+    },
+    {
+      "tool_name": "GitHub",
+      "when_to_use": "Use GitHub for repositories, pull requests, issues, and code collaboration.",
+      "example_queries": ["Create an issue for intermittent login failures."]
+    },
+    {
+      "tool_name": "Google BigQuery",
+      "when_to_use": "Use BigQuery to run analytics SQL on large datasets.",
+      "example_queries": ["Query weekly active users by country for Q1."]
+    },
+    {
+      "tool_name": "GetResponse",
+      "when_to_use": "Use GetResponse for email campaigns, landing pages, and automations.",
+      "example_queries": ["Create a drip sequence for webinar attendees."]
+    },
+    {
+      "tool_name": "Google Classroom",
+      "when_to_use": "Use Google Classroom to manage classes, assignments, and student updates.",
+      "example_queries": ["Post homework instructions to Class 10A."]
+    },
+    {
+      "tool_name": "Google Contacts",
+      "when_to_use": "Use Google Contacts to create and organize contact records.",
+      "example_queries": ["Add a new vendor contact with phone and email."]
+    },
+    {
+      "tool_name": "Google Tasks",
+      "when_to_use": "Use Google Tasks to manage personal or lightweight to-do lists.",
+      "example_queries": ["Create a task to submit expense report by Friday."]
+    },
+    {
+      "tool_name": "Google Merchant Center",
+      "when_to_use": "Use Merchant Center to manage product feed listings for Google Shopping.",
+      "example_queries": ["List products disapproved for missing GTIN."]
+    },
+    {
+      "tool_name": "Granola",
+      "when_to_use": "Use Granola to capture and organize AI-generated meeting notes.",
+      "example_queries": ["Generate a concise recap of this planning meeting."]
+    },
+    {
+      "tool_name": "Grafana",
+      "when_to_use": "Use Grafana to visualize and monitor metrics, logs, and dashboards.",
+      "example_queries": ["Create a dashboard for API latency and error rate."]
+    },
+    {
+      "tool_name": "Gumroad",
+      "when_to_use": "Use Gumroad to sell digital products, memberships, or creator content.",
+      "example_queries": ["Publish a new ebook product with pricing tiers."]
+    },
+    {
+      "tool_name": "Instantly",
+      "when_to_use": "Use Instantly to run cold outreach email campaigns and track responses.",
+      "example_queries": ["Launch outreach to 200 qualified leads."]
+    },
+    {
+      "tool_name": "Jobber",
+      "when_to_use": "Use Jobber for field service scheduling, invoicing, and client operations.",
+      "example_queries": ["Schedule a technician visit for Thursday morning."]
+    },
+    {
+      "tool_name": "Jotform",
+      "when_to_use": "Use Jotform to build online forms and collect submissions.",
+      "example_queries": ["Create a job application form with resume upload."]
+    },
+    {
+      "tool_name": "Kaggle",
+      "when_to_use": "Use Kaggle to find datasets, run notebooks, and explore ML resources.",
+      "example_queries": ["Find a public dataset for customer churn modeling."]
+    },
+    {
+      "tool_name": "Keap",
+      "when_to_use": "Use Keap for CRM and small-business marketing/sales automations.",
+      "example_queries": ["Add a lead and trigger a nurture email sequence."]
+    },
+    {
+      "tool_name": "Kibana",
+      "when_to_use": "Use Kibana to search, analyze, and visualize Elasticsearch logs/data.",
+      "example_queries": ["Show backend 500 errors from the last 24 hours."]
+    },
+    {
+      "tool_name": "Kit",
+      "when_to_use": "Use Kit for creator email marketing and audience monetization workflows.",
+      "example_queries": ["Create a welcome sequence for new subscribers."]
+    },
+    {
+      "tool_name": "Lemlist",
+      "when_to_use": "Use Lemlist for personalized outbound email campaigns.",
+      "example_queries": ["Start a personalized cold email campaign for target accounts."]
+    },
+    {
+      "tool_name": "Linear",
+      "when_to_use": "Use Linear for software issue tracking and sprint planning.",
+      "example_queries": ["Create a Linear issue for checkout UI bug."]
+    },
+    {
+      "tool_name": "LinkedIn",
+      "when_to_use": "Use LinkedIn for professional networking and company/person lookup.",
+      "example_queries": ["Find product managers at fintech startups."]
+    },
+    {
+      "tool_name": "Mailchimp",
+      "when_to_use": "Use Mailchimp to create email campaigns and audience segments.",
+      "example_queries": ["Send a product update campaign to active users."]
+    },
+    {
+      "tool_name": "Mailgun",
+      "when_to_use": "Use Mailgun APIs to send, receive, and track transactional email.",
+      "example_queries": ["Send password reset emails using the transactional API."]
+    },
+    {
+      "tool_name": "MailerLite",
+      "when_to_use": "Use MailerLite for newsletter campaigns and automations.",
+      "example_queries": ["Create an automation for new newsletter subscribers."]
+    },
+    {
+      "tool_name": "Manus",
+      "when_to_use": "Use Manus for AI-agent workflow orchestration and automation.",
+      "example_queries": ["Run a weekly workflow to summarize competitor updates."]
+    },
+    {
+      "tool_name": "ManyChat",
+      "when_to_use": "Use ManyChat to automate customer chat journeys on messaging channels.",
+      "example_queries": ["Set up an Instagram DM auto-reply flow for FAQs."]
+    },
+    {
+      "tool_name": "Memelord",
+      "when_to_use": "Use Memelord to generate memes and short meme media via AI APIs.",
+      "example_queries": ["Generate a meme for the new feature launch."]
+    },
+    {
+      "tool_name": "Microsoft Excel",
+      "when_to_use": "Use Microsoft Excel for spreadsheet analysis, formulas, and reporting.",
+      "example_queries": ["Build a pivot table for monthly sales by region."]
+    },
+    {
+      "tool_name": "Microsoft To Do",
+      "when_to_use": "Use Microsoft To Do to manage task lists, reminders, and priorities.",
+      "example_queries": ["Add a reminder to renew SSL certificates next week."]
+    },
+    {
+      "tool_name": "Microsoft Teams",
+      "when_to_use": "Use Microsoft Teams for team chat, meetings, and file collaboration.",
+      "example_queries": ["Post release notes in the Engineering channel."]
+    },
+    {
+      "tool_name": "Motion",
+      "when_to_use": "Use Motion to auto-schedule tasks and optimize daily workload planning.",
+      "example_queries": ["Auto-schedule my backlog tasks for this week."]
+    },
+    {
+      "tool_name": "Netlify",
+      "when_to_use": "Use Netlify to deploy and host frontend sites and serverless functions.",
+      "example_queries": ["Deploy the latest main branch to production."]
+    },
+    {
+      "tool_name": "OneDrive",
+      "when_to_use": "Use OneDrive to store, sync, and share files in Microsoft cloud storage.",
+      "example_queries": ["Upload this report and share it with finance."]
+    },
+    {
+      "tool_name": "OneNote",
+      "when_to_use": "Use OneNote to capture and organize notes in digital notebooks.",
+      "example_queries": ["Create a page for customer interview notes."]
+    },
+    {
+      "tool_name": "PDF.co",
+      "when_to_use": "Use PDF.co for PDF generation, conversion, extraction, and processing.",
+      "example_queries": ["Extract all tables from this PDF invoice."]
+    },
+    {
+      "tool_name": "PostHog",
+      "when_to_use": "Use PostHog for product analytics, events, funnels, and feature flags.",
+      "example_queries": ["Show signup-to-activation funnel conversion by week."]
+    },
+    {
+      "tool_name": "Podio",
+      "when_to_use": "Use Podio to organize projects, tasks, and custom workflow apps.",
+      "example_queries": ["Create a new onboarding item in the client workspace."]
+    },
+    {
+      "tool_name": "Quo",
+      "when_to_use": "Use Quo for agency/service operations and project management workflows.",
+      "example_queries": ["Track this client deliverable and its billing status."]
+    },
+    {
+      "tool_name": "Reducto",
+      "when_to_use": "Use Reducto to extract structured data from complex documents.",
+      "example_queries": ["Extract invoice number, date, and total from uploaded PDFs."]
+    },
+    {
+      "tool_name": "Resend",
+      "when_to_use": "Use Resend to send transactional and marketing emails via API.",
+      "example_queries": ["Send an order confirmation email through Resend."]
+    },
+    {
+      "tool_name": "SendGrid",
+      "when_to_use": "Use SendGrid to deliver transactional and campaign emails reliably.",
+      "example_queries": ["Send a transactional receipt using template ID 123."]
+    },
+    {
+      "tool_name": "Sentry",
+      "when_to_use": "Use Sentry to monitor errors, performance, and release health.",
+      "example_queries": ["List top backend exceptions from the past 7 days."]
+    },
+    {
+      "tool_name": "SignNow",
+      "when_to_use": "Use SignNow for e-signature workflows and document routing.",
+      "example_queries": ["Send this contract for signature to two recipients."]
+    },
+    {
+      "tool_name": "SharePoint",
+      "when_to_use": "Use SharePoint for team document management and internal sites.",
+      "example_queries": ["Upload policy docs to the HR SharePoint library."]
+    },
+    {
+      "tool_name": "Snapchat",
+      "when_to_use": "Use Snapchat to manage account content and multimedia communications.",
+      "example_queries": ["Prepare and schedule a story for tomorrow's campaign."]
+    },
+    {
+      "tool_name": "Square",
+      "when_to_use": "Use Square for payments, invoicing, and point-of-sale operations.",
+      "example_queries": ["Create a payment link for this invoice amount."]
+    },
+    {
+      "tool_name": "Squarespace",
+      "when_to_use": "Use Squarespace to build and manage hosted websites and content.",
+      "example_queries": ["Update homepage hero text and publish changes."]
+    },
+    {
+      "tool_name": "Sunsama",
+      "when_to_use": "Use Sunsama to plan daily priorities and schedule focused work.",
+      "example_queries": ["Plan my top 5 tasks for tomorrow with time blocks."]
+    },
+    {
+      "tool_name": "Supabase",
+      "when_to_use": "Use Supabase for Postgres data, auth, storage, and backend APIs.",
+      "example_queries": ["Insert a new row into the orders table."]
+    },
+    {
+      "tool_name": "Systeme.io",
+      "when_to_use": "Use Systeme.io to build funnels, email campaigns, and course flows.",
+      "example_queries": ["Create a funnel for webinar registration."]
+    },
+    {
+      "tool_name": "Telegram Bot",
+      "when_to_use": "Use Telegram Bot APIs to send and automate Telegram messages.",
+      "example_queries": ["Send a deployment alert to the ops Telegram group."]
+    },
+    {
+      "tool_name": "Tally",
+      "when_to_use": "Use Tally to create lightweight forms and collect responses.",
+      "example_queries": ["Create a waitlist form and share its link."]
+    },
+    {
+      "tool_name": "Tavily",
+      "when_to_use": "Use Tavily for real-time AI-focused web search retrieval.",
+      "example_queries": ["Find current pricing pages for these competitors."]
+    },
+    {
+      "tool_name": "TickTick",
+      "when_to_use": "Use TickTick to manage tasks, habits, and calendar planning.",
+      "example_queries": ["Create a recurring weekly planning task for Mondays."]
+    },
+    {
+      "tool_name": "Todoist",
+      "when_to_use": "Use Todoist to organize personal or team tasks and due dates.",
+      "example_queries": ["Add task: Prepare board deck due Monday."]
+    },
+    {
+      "tool_name": "Toggl Track",
+      "when_to_use": "Use Toggl Track to capture billable hours and project time data.",
+      "example_queries": ["Start tracking time on Client A redesign work."]
+    },
+    {
+      "tool_name": "Twilio",
+      "when_to_use": "Use Twilio for programmable SMS, voice, and messaging communications.",
+      "example_queries": ["Send a one-time passcode via SMS."]
+    },
+    {
+      "tool_name": "Twenty",
+      "when_to_use": "Use Twenty as an open-source CRM for contacts and deal tracking.",
+      "example_queries": ["Create a new opportunity and assign an owner."]
+    },
+    {
+      "tool_name": "Unbounce",
+      "when_to_use": "Use Unbounce to build and optimize conversion-focused landing pages.",
+      "example_queries": ["Create an A/B test for the signup landing page."]
+    },
+    {
+      "tool_name": "Vercel",
+      "when_to_use": "Use Vercel to deploy and host web apps and serverless functions.",
+      "example_queries": ["Deploy latest commit to production."]
+    },
+    {
+      "tool_name": "Vimeo",
+      "when_to_use": "Use Vimeo to host, manage, and share video content.",
+      "example_queries": ["Upload the webinar recording and set it to unlisted."]
+    },
+    {
+      "tool_name": "WATI",
+      "when_to_use": "Use WATI to automate customer engagement over WhatsApp Business API.",
+      "example_queries": ["Send order confirmation template via WhatsApp."]
+    },
+    {
+      "tool_name": "WooCommerce",
+      "when_to_use": "Use WooCommerce to manage products, inventory, and store orders.",
+      "example_queries": ["Update stock count for SKU-123."]
+    },
+    {
+      "tool_name": "WordPress",
+      "when_to_use": "Use WordPress to manage site pages, posts, media, and plugins.",
+      "example_queries": ["Publish a new blog post in the News category."]
+    },
+    {
+      "tool_name": "Wrike",
+      "when_to_use": "Use Wrike for project planning, task dependencies, and team collaboration.",
+      "example_queries": ["Create a task dependent on design review completion."]
+    },
+    {
+      "tool_name": "Zoho Bigin",
+      "when_to_use": "Use Zoho Bigin for pipeline-centric CRM workflows in small businesses.",
+      "example_queries": ["Add a lead and schedule a follow-up call."]
+    },
+    {
+      "tool_name": "Zoho Books",
+      "when_to_use": "Use Zoho Books for accounting, invoices, and expense management.",
+      "example_queries": ["Record a vendor bill and mark it payable."]
+    },
+    {
+      "tool_name": "Zoho Bookings",
+      "when_to_use": "Use Zoho Bookings to manage appointment booking and staff availability.",
+      "example_queries": ["Create a booking page for 60-minute consultations."]
+    },
+    {
+      "tool_name": "Zoho Calendar",
+      "when_to_use": "Use Zoho Calendar to create and manage events and schedules.",
+      "example_queries": ["Add a recurring weekly team sync event."]
+    },
+    {
+      "tool_name": "Zoho CRM",
+      "when_to_use": "Use Zoho CRM to manage leads, contacts, and sales pipeline activity.",
+      "example_queries": ["Update lead status to Qualified and assign owner."]
+    },
+    {
+      "tool_name": "Zoho Inventory",
+      "when_to_use": "Use Zoho Inventory to track stock, fulfill orders, and manage SKUs.",
+      "example_queries": ["Adjust stock for Product X after receiving shipment."]
+    },
+    {
+      "tool_name": "Zoho Mail",
+      "when_to_use": "Use Zoho Mail for secure business email communication workflows.",
+      "example_queries": ["Send an internal company-wide announcement email."]
+    },
+    {
+      "tool_name": "Zoho People",
+      "when_to_use": "Use Zoho People for HR tasks like employee records and leave workflows.",
+      "example_queries": ["Approve PTO request for next week."]
+    },
+    {
+      "tool_name": "Zoho Projects",
+      "when_to_use": "Use Zoho Projects to plan milestones, tasks, and delivery timelines.",
+      "example_queries": ["Create a milestone for beta launch."]
+    },
+    {
+      "tool_name": "Zoho Recruit",
+      "when_to_use": "Use Zoho Recruit for applicant tracking and hiring pipeline management.",
+      "example_queries": ["Move candidate to Interview stage and notify panel."]
+    }
+  ]
+}

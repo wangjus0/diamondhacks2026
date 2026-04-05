@@ -5,12 +5,16 @@ import { ConversationTimeline } from "./features/conversation/ConversationTimeli
 import { useAuth } from "./features/auth/AuthProvider";
 import { getSupabaseClient } from "./lib/supabase";
 import {
+  buildProfileCustomFieldsRecord,
+  buildProfileMarkdown,
   createDefaultOnboardingData,
   createPayload,
   deriveCurrentStep,
   mergePersistedOnboardingData,
+  validateStep,
   type MicrophoneAccessStatus,
   type OnboardingFormData,
+  type ProfileCustomField,
 } from "./features/auth/onboardingSchema";
 import { normalizeMicrophoneAccessStatus } from "./features/auth/microphonePermission";
 import {
@@ -24,7 +28,7 @@ import {
   type IntegrationAuthDescriptor,
 } from "./data/integrationAuthMatrix";
 
-type WorkspaceView = "home" | "integrations" | "settings";
+type WorkspaceView = "home" | "integrations" | "profile" | "settings";
 
 const DEFAULT_SHORTCUT = "Cmd+Shift+Space";
 const SHORTCUT_MODIFIER_KEYS = new Set(["Shift", "Control", "Meta", "Alt", "AltGraph"]);
@@ -197,6 +201,40 @@ function formatShortcutFromKeyDown(event: ShortcutInputEvent): string | null {
   return [...modifiers, normalizedKey].join("+");
 }
 
+function validateProfileCustomFields(customFields: ProfileCustomField[]): string | null {
+  const seenKeys = new Set<string>();
+
+  for (const entry of customFields) {
+    const key = entry.key.trim();
+    const value = entry.value.trim();
+
+    if (key.length === 0 && value.length === 0) {
+      continue;
+    }
+
+    if (key.length === 0 || value.length === 0) {
+      return "Each custom field needs both a key and a value.";
+    }
+
+    if (key.length > 80) {
+      return "Custom field keys must be 80 characters or fewer.";
+    }
+
+    if (value.length > 280) {
+      return "Custom field values must be 280 characters or fewer.";
+    }
+
+    const dedupeKey = key.toLowerCase();
+    if (seenKeys.has(dedupeKey)) {
+      return "Custom field keys must be unique.";
+    }
+
+    seenKeys.add(dedupeKey);
+  }
+
+  return null;
+}
+
 export function App() {
   const { user, signOut, authError, clearAuthError } = useAuth();
   const supabase = useMemo(() => getSupabaseClient(), []);
@@ -213,6 +251,8 @@ export function App() {
   const [settingsStatusMessage, setSettingsStatusMessage] = useState<string | null>(null);
   const [isCapturingSettingsShortcut, setIsCapturingSettingsShortcut] = useState(false);
   const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [settingsProfileSnapshot, setSettingsProfileSnapshot] =
+    useState<OnboardingFormData["profile"] | null>(null);
   const [integrationCatalogQuery, setIntegrationCatalogQuery] = useState("");
   const [selectedIntegrationName, setSelectedIntegrationName] = useState<string>(
     BROWSER_USE_INTEGRATIONS[0] ?? "Gmail",
@@ -232,6 +272,9 @@ export function App() {
   );
   const isNameDirty = settingsData
     ? displayNameDraft.trim() !== settingsData.account.displayName.trim()
+    : false;
+  const isProfileDirty = settingsData
+    ? JSON.stringify(settingsData.profile) !== JSON.stringify(settingsProfileSnapshot ?? createDefaultOnboardingData().profile)
     : false;
   const filteredIntegrationCatalog = useMemo(() => {
     const query = integrationCatalogQuery.trim().toLowerCase();
@@ -296,9 +339,11 @@ export function App() {
       ? "Session event stream"
       : activeView === "integrations"
         ? "Integration setup"
+      : activeView === "profile"
+        ? "Personal profile"
       : activeView === "settings"
         ? "Workspace settings"
-        : "Voice assistant workspace";
+        : "Murmur workspace";
 
   const handleSignOut = async () => {
     clearAuthError();
@@ -310,25 +355,80 @@ export function App() {
     }
   };
 
+  const persistProfileRecord = async (nextData: OnboardingFormData) => {
+    if (!user) {
+      throw new Error("You must be signed in to update settings.");
+    }
+
+    const profileName =
+      nextData.profile.fullName.trim().length > 0
+        ? nextData.profile.fullName.trim()
+        : nextData.account.displayName.trim();
+    const profileMarkdown = buildProfileMarkdown(nextData, user.email ?? null);
+    const profileData = {
+      fullName: nextData.profile.fullName.trim(),
+      dateOfBirth: nextData.profile.dateOfBirth.trim(),
+      major: nextData.profile.major.trim(),
+      occupation: nextData.profile.occupation.trim(),
+      graduationYear: nextData.profile.graduationYear.trim(),
+      zipCode: nextData.profile.zipCode.trim(),
+      phoneNumber: nextData.profile.phoneNumber.trim(),
+      customFields: buildProfileCustomFieldsRecord(nextData.profile.customFields),
+    };
+
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        name: profileName.length > 0 ? profileName : null,
+        profile_markdown: profileMarkdown,
+        profile_data: profileData,
+      },
+      { onConflict: "id" },
+    );
+
+    if (!profileError) {
+      return;
+    }
+
+    const { error: fallbackError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        name: profileName.length > 0 ? profileName : null,
+      },
+      { onConflict: "id" },
+    );
+
+    if (fallbackError) {
+      throw new Error(fallbackError.message);
+    }
+  };
+
   const persistSettingsData = async (nextData: OnboardingFormData) => {
     if (!user) {
       throw new Error("You must be signed in to update settings.");
     }
 
     setIsSavingSettingsData(true);
-    const payload = createPayload(settingsStepIndex, nextData);
-    const { error: upsertError } = await supabase.from("onboarding_responses").upsert(
-      {
-        user_id: user.id,
-        responses: payload,
-        completed: true,
-      },
-      { onConflict: "user_id" },
-    );
-    setIsSavingSettingsData(false);
+    try {
+      const payload = createPayload(settingsStepIndex, nextData);
+      const { error: upsertError } = await supabase.from("onboarding_responses").upsert(
+        {
+          user_id: user.id,
+          responses: payload,
+          completed: true,
+        },
+        { onConflict: "user_id" },
+      );
 
-    if (upsertError) {
-      throw new Error(upsertError.message);
+      if (upsertError) {
+        throw new Error(upsertError.message);
+      }
+
+      await persistProfileRecord(nextData);
+    } finally {
+      setIsSavingSettingsData(false);
     }
   };
 
@@ -364,9 +464,13 @@ export function App() {
       return;
     }
 
+    if (!isNameDirty) {
+      return;
+    }
+
     const nextName = displayNameDraft.trim();
     if (nextName.length === 0) {
-      setSettingsError("Name is required.");
+      setSettingsError("Nickname is required.");
       return;
     }
 
@@ -384,9 +488,120 @@ export function App() {
 
     try {
       await persistSettingsData(nextData);
-      setSettingsStatusMessage("Name updated.");
+      setSettingsStatusMessage("Nickname updated.");
     } catch (saveError) {
-      setSettingsError(saveError instanceof Error ? saveError.message : "Failed to save name.");
+      setSettingsError(saveError instanceof Error ? saveError.message : "Failed to save nickname.");
+    }
+  };
+
+  const updateSettingsProfileField = (
+    field: Exclude<keyof OnboardingFormData["profile"], "customFields">,
+    value: string,
+  ) => {
+    setSettingsData((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        profile: {
+          ...previous.profile,
+          [field]: value,
+        },
+      };
+    });
+    setSettingsError(null);
+  };
+
+  const addSettingsProfileCustomField = () => {
+    setSettingsData((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        profile: {
+          ...previous.profile,
+          customFields: [...previous.profile.customFields, { key: "", value: "" }],
+        },
+      };
+    });
+    setSettingsError(null);
+  };
+
+  const updateSettingsProfileCustomField = (
+    index: number,
+    field: "key" | "value",
+    value: string,
+  ) => {
+    setSettingsData((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        profile: {
+          ...previous.profile,
+          customFields: previous.profile.customFields.map((entry, currentIndex) =>
+            currentIndex === index
+              ? {
+                  ...entry,
+                  [field]: value,
+                }
+              : entry,
+          ),
+        },
+      };
+    });
+    setSettingsError(null);
+  };
+
+  const removeSettingsProfileCustomField = (index: number) => {
+    setSettingsData((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        profile: {
+          ...previous.profile,
+          customFields: previous.profile.customFields.filter((_, currentIndex) => currentIndex !== index),
+        },
+      };
+    });
+    setSettingsError(null);
+  };
+
+  const saveProfileDetails = async () => {
+    if (!settingsData) {
+      return;
+    }
+
+    const profileValidation = validateStep("profile", settingsData);
+    const firstFieldError = Object.values(profileValidation)[0];
+    if (firstFieldError) {
+      setSettingsError(firstFieldError);
+      return;
+    }
+
+    const customFieldError = validateProfileCustomFields(settingsData.profile.customFields);
+    if (customFieldError) {
+      setSettingsError(customFieldError);
+      return;
+    }
+
+    setSettingsError(null);
+    setSettingsStatusMessage(null);
+    try {
+      await persistSettingsData(settingsData);
+      setSettingsProfileSnapshot(settingsData.profile);
+      setSettingsStatusMessage("Profile details updated.");
+    } catch (saveError) {
+      setSettingsError(saveError instanceof Error ? saveError.message : "Failed to save profile details.");
     }
   };
 
@@ -578,7 +793,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (activeView !== "settings" || !user) {
+    if ((activeView !== "settings" && activeView !== "profile") || !user) {
       return;
     }
 
@@ -607,6 +822,7 @@ export function App() {
       const merged = mergePersistedOnboardingData(data?.responses ?? null);
       setSettingsData(merged);
       setDisplayNameDraft(merged.account.displayName);
+      setSettingsProfileSnapshot(merged.profile);
       setSettingsStepIndex(deriveCurrentStep(data?.responses ?? null));
       setIsLoadingSettingsData(false);
     };
@@ -678,6 +894,16 @@ export function App() {
             }}
           >
             Integrations
+          </button>
+          <button
+            className={`rail-item${activeView === "profile" ? " rail-item-active" : ""}`}
+            aria-label="Profile"
+            type="button"
+            onClick={() => {
+              setActiveView("profile");
+            }}
+          >
+            Profile
           </button>
           <button
             className={`rail-item${activeView === "settings" ? " rail-item-active" : ""}`}
@@ -969,226 +1195,6 @@ export function App() {
 
                 <div className="settings-step-list">
                   <article className="section-card settings-step-card">
-                    <h4 className="settings-step-title">Profile</h4>
-                    <div className="field settings-name-field">
-                      <span className="field-label">Name</span>
-                      <div className="settings-name-row">
-                        <input
-                          type="text"
-                          value={displayNameDraft}
-                          onChange={(event) => {
-                            setDisplayNameDraft(event.target.value);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key !== "Enter") {
-                              return;
-                            }
-                            event.preventDefault();
-                            void saveDisplayName();
-                          }}
-                          placeholder="Your name"
-                        />
-                        <button
-                          type="button"
-                          className="button button-secondary"
-                          onClick={() => {
-                            void saveDisplayName();
-                          }}
-                          disabled={!isNameDirty || isSavingSettingsData}
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-
-                  <article className="section-card settings-step-card">
-                    <h4 className="settings-step-title">Frequent Info</h4>
-                    <p style={{ fontSize: "0.85rem", opacity: 0.7, margin: "0 0 0.75rem" }}>
-                      Commonly-used personal data that helps Murmur auto-fill forms.
-                    </p>
-
-                    <div className="field">
-                      <span className="field-label">Phone number</span>
-                      <input
-                        type="tel"
-                        value={settingsData?.frequentInfo?.phone ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, phone: event.target.value },
-                          });
-                        }}
-                        placeholder="(123) 456-7890"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Student ID / PID</span>
-                      <input
-                        type="text"
-                        value={settingsData?.frequentInfo?.pid ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, pid: event.target.value },
-                          });
-                        }}
-                        placeholder="e.g. A12345678"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Year in school</span>
-                      <select
-                        value={settingsData?.frequentInfo?.yearInSchool ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, yearInSchool: event.target.value },
-                          });
-                        }}
-                      >
-                        <option value="">Select...</option>
-                        <option value="1st year">1st year</option>
-                        <option value="2nd year">2nd year</option>
-                        <option value="3rd year">3rd year</option>
-                        <option value="4th year">4th year</option>
-                        <option value="5th year+">5th year+</option>
-                        <option value="Graduate">Graduate</option>
-                        <option value="N/A">N/A</option>
-                      </select>
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Major</span>
-                      <input
-                        type="text"
-                        value={settingsData?.frequentInfo?.major ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, major: event.target.value },
-                          });
-                        }}
-                        placeholder="e.g. Computer Science"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Current job / role</span>
-                      <input
-                        type="text"
-                        value={settingsData?.frequentInfo?.job ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, job: event.target.value },
-                          });
-                        }}
-                        placeholder="e.g. Software Engineer Intern"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Employer / Company</span>
-                      <input
-                        type="text"
-                        value={settingsData?.frequentInfo?.employer ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, employer: event.target.value },
-                          });
-                        }}
-                        placeholder="e.g. Acme Corp"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Mailing address</span>
-                      <textarea
-                        rows={2}
-                        value={settingsData?.frequentInfo?.address ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, address: event.target.value },
-                          });
-                        }}
-                        placeholder="123 Main St, City, ST 12345"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Date of birth</span>
-                      <input
-                        type="text"
-                        value={settingsData?.frequentInfo?.dateOfBirth ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, dateOfBirth: event.target.value },
-                          });
-                        }}
-                        placeholder="MM/DD/YYYY"
-                      />
-                    </div>
-
-                    <div className="field">
-                      <span className="field-label">Gender</span>
-                      <select
-                        value={settingsData?.frequentInfo?.gender ?? ""}
-                        onChange={(event) => {
-                          if (!settingsData) return;
-                          setSettingsData({
-                            ...settingsData,
-                            frequentInfo: { ...settingsData.frequentInfo, gender: event.target.value },
-                          });
-                        }}
-                      >
-                        <option value="">Select...</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Non-binary">Non-binary</option>
-                        <option value="Prefer not to say">Prefer not to say</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-
-                    <div style={{ marginTop: "0.75rem" }}>
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        onClick={() => {
-                          if (!settingsData) return;
-                          void (async () => {
-                            setSettingsError(null);
-                            setSettingsStatusMessage(null);
-                            try {
-                              await persistSettingsData(settingsData);
-                              setSettingsStatusMessage("Frequent info saved.");
-                            } catch (saveError) {
-                              setSettingsError(saveError instanceof Error ? saveError.message : "Failed to save frequent info.");
-                            }
-                          })();
-                        }}
-                        disabled={isSavingSettingsData}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </article>
-
-                  <article className="section-card settings-step-card">
                     <h4 className="settings-step-title">Voice</h4>
 
                     <div className="permission-item permission-item-minimal voice-setup-microphone-block settings-microphone-block">
@@ -1285,6 +1291,199 @@ export function App() {
                 {(isLoadingSettingsData || isSavingSettingsData) && (
                   <p className="status-note">
                     {isLoadingSettingsData ? "Loading settings..." : "Saving changes..."}
+                  </p>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeView === "profile" && (
+            <div className="app-dashboard app-dashboard-settings">
+              <section className="panel stack-panel settings-panel">
+                <h3 className="panel-heading">Profile</h3>
+
+                {settingsError && <div className="alert alert-danger">{settingsError}</div>}
+                {settingsStatusMessage && <div className="alert alert-info">{settingsStatusMessage}</div>}
+
+                <div className="settings-step-list">
+                  <article className="section-card settings-step-card">
+                    <div className="field settings-name-field">
+                      <span className="field-label">Nickname</span>
+                      <input
+                        type="text"
+                        value={displayNameDraft}
+                        onChange={(event) => {
+                          setDisplayNameDraft(event.target.value);
+                        }}
+                        onBlur={() => {
+                          void saveDisplayName();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") {
+                            return;
+                          }
+                          event.preventDefault();
+                          void saveDisplayName();
+                        }}
+                        placeholder="Your nickname"
+                      />
+                    </div>
+
+                    <div className="onboarding-fields profile-custom-field-list">
+                      <label className="field">
+                        <span className="field-label">Full name</span>
+                        <input
+                          type="text"
+                          value={settingsData?.profile.fullName ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("fullName", event.target.value);
+                          }}
+                          placeholder="Alex Rivera"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span className="field-label">Date of birth</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={settingsData?.profile.dateOfBirth ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("dateOfBirth", event.target.value);
+                          }}
+                          placeholder="mm/dd/yyyy"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span className="field-label">Major</span>
+                        <input
+                          type="text"
+                          value={settingsData?.profile.major ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("major", event.target.value);
+                          }}
+                          placeholder="Computer Science"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span className="field-label">Occupation</span>
+                        <input
+                          type="text"
+                          value={settingsData?.profile.occupation ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("occupation", event.target.value);
+                          }}
+                          placeholder="Software Engineer"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span className="field-label">Graduation</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={settingsData?.profile.graduationYear ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("graduationYear", event.target.value);
+                          }}
+                          placeholder="mm/yyyy"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span className="field-label">ZIP code</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={settingsData?.profile.zipCode ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("zipCode", event.target.value);
+                          }}
+                          placeholder="12345"
+                        />
+                      </label>
+
+                      <label className="field">
+                        <span className="field-label">Phone number</span>
+                        <input
+                          type="text"
+                          value={settingsData?.profile.phoneNumber ?? ""}
+                          onChange={(event) => {
+                            updateSettingsProfileField("phoneNumber", event.target.value);
+                          }}
+                          placeholder="(123)-456-7890"
+                        />
+                      </label>
+
+                      <div className="field">
+                        <span className="field-label">Custom fields</span>
+                        <div className="onboarding-fields profile-custom-field-list">
+                          {(settingsData?.profile.customFields ?? []).length === 0 ? (
+                            <p className="status-note">No custom fields yet.</p>
+                          ) : (
+                            (settingsData?.profile.customFields ?? []).map((entry, index) => (
+                              <div key={`settings-profile-custom-${index}`} className="profile-custom-field-row">
+                                <input
+                                  type="text"
+                                  value={entry.key}
+                                  onChange={(event) => {
+                                    updateSettingsProfileCustomField(index, "key", event.target.value);
+                                  }}
+                                  placeholder="Key"
+                                />
+                                <input
+                                  type="text"
+                                  value={entry.value}
+                                  onChange={(event) => {
+                                    updateSettingsProfileCustomField(index, "value", event.target.value);
+                                  }}
+                                  placeholder="Value"
+                                />
+                                <button
+                                  type="button"
+                                  className="button button-secondary profile-custom-field-remove"
+                                  onClick={() => {
+                                    removeSettingsProfileCustomField(index);
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        <div className="profile-custom-field-actions">
+                          <button
+                            type="button"
+                            className="button button-secondary"
+                            onClick={addSettingsProfileCustomField}
+                          >
+                            Add custom field
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="settings-name-row">
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          onClick={() => {
+                            void saveProfileDetails();
+                          }}
+                          disabled={!isProfileDirty || isSavingSettingsData}
+                        >
+                          Save profile
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                {(isLoadingSettingsData || isSavingSettingsData) && (
+                  <p className="status-note">
+                    {isLoadingSettingsData ? "Loading profile..." : "Saving changes..."}
                   </p>
                 )}
               </section>

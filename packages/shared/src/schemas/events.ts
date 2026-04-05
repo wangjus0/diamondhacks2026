@@ -13,12 +13,18 @@ const IntentResultSchema = z.object({
   answer: z.string().optional(),
 });
 
+const StartSessionIntegrationAuthSchema = z.object({
+  oauthConnected: z.boolean().optional(),
+  apiKeyValues: z.record(z.string().min(1)).optional(),
+});
+
 // ── Client → Server ────────────────────────────────────────
 export const ClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("start_session"),
     profileId: z.string().uuid().optional(),
     browserUseApiKey: z.string().min(1).optional(),
+    integrationAuth: z.record(StartSessionIntegrationAuthSchema).optional(),
   }),
   z.object({ type: z.literal("audio_chunk"), data: z.string() }),
   z.object({ type: z.literal("audio_end") }),

@@ -10,11 +10,17 @@ export interface IntentResult {
   answer?: string;
 }
 
+export interface IntegrationSessionAuth {
+  oauthConnected?: boolean;
+  apiKeyValues?: Record<string, string>;
+}
+
 // ── Client → Server events ─────────────────────────────────
 export interface StartSessionEvent {
   type: "start_session";
   profileId?: string;
   browserUseApiKey?: string;
+  integrationAuth?: Record<string, IntegrationSessionAuth>;
 }
 
 export interface AudioChunkEvent {

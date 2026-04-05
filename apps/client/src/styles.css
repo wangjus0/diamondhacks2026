@@ -1277,6 +1277,26 @@ body.runtime-macos .app-window-drag-handle {
   resize: vertical;
 }
 
+.profile-custom-field-list {
+  gap: 8px;
+}
+
+.profile-custom-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-custom-field-remove {
+  min-inline-size: 96px;
+}
+
+.profile-custom-field-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .footer-actions {
   display: flex;
   justify-content: space-between;
@@ -2071,6 +2091,36 @@ body::before {
   gap: 8px;
 }
 
+.app-dashboard-settings .settings-step-list {
+  gap: 18px;
+}
+
+.app-dashboard-settings .settings-step-card,
+.app-dashboard-settings .permission-item,
+.app-dashboard-settings .settings-step-value {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.app-dashboard-settings .settings-step-card {
+  display: grid;
+  gap: 10px;
+}
+
+.app-dashboard-settings .permission-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+}
+
+.app-dashboard-settings .voice-setup-microphone-actions {
+  margin-top: 0;
+  justify-content: flex-start;
+}
+
 .settings-step-kicker {
   margin: 0;
   font-size: 0.72rem;
@@ -2584,6 +2634,14 @@ body::before {
 
   .voice-setup-microphone-actions {
     margin-top: 10px;
+  }
+
+  .profile-custom-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-custom-field-remove {
+    min-inline-size: 0;
   }
 
   .onboarding-visual {

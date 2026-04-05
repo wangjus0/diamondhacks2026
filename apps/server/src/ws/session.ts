@@ -13,15 +13,14 @@ import type {
   SessionConnectionContext,
   SessionStatus,
 } from "../modules/session/session-types.js";
-import {
-  handleTranscriptFinal,
-  createEmptyHistory,
-  type ConversationHistory,
-} from "../orchestrator/orchestrator.js";
+import { handleTranscriptFinal } from "../orchestrator/orchestrator.js";
 import { BrowserAdapter } from "../tools/browser/adapter.js";
 import { SttAdapter } from "../voice/stt.js";
 
 type SessionTurnState = Extract<ServerEvent, { type: "state" }>["state"];
+type StartSessionIntegrationAuth = NonNullable<
+  Extract<ClientEvent, { type: "start_session" }>["integrationAuth"]
+>;
 
 const DEFAULT_CONNECTION: SessionConnectionContext = {
   ip: null,
@@ -55,9 +54,9 @@ export class Session {
   private hasFinalizedRun = false;
   private narrationSequence = 0;
   private browserAdapter: BrowserAdapter | null = null;
-  private conversationHistory: ConversationHistory = createEmptyHistory();
   private browserProfileId: string | null = null;
   private browserUseApiKeyOverride: string | null = null;
+  private integrationAuthOverride: StartSessionIntegrationAuth = {};
   private hasEnded = false;
   private isPersistenceDisabled = false;
 
@@ -140,17 +139,13 @@ export class Session {
 
     switch (event.type) {
       case "start_session":
-        this.onStartSession(event.profileId, event.browserUseApiKey);
+        this.onStartSession(event.profileId, event.browserUseApiKey, event.integrationAuth);
         break;
       case "audio_chunk":
         void this.onAudioChunk(event.data);
         break;
       case "audio_end":
-        this.onAudioEnd().catch((err) => {
-          console.error(`[session:${this.id}] onAudioEnd error:`, err);
-          this.setState("idle");
-          this.send({ type: "error", message: "Failed to process audio" });
-        });
+        void this.onAudioEnd();
         break;
       case "interrupt":
         this.onInterrupt();
@@ -158,13 +153,18 @@ export class Session {
     }
   }
 
-  private onStartSession(profileId?: string, browserUseApiKey?: string): void {
+  private onStartSession(
+    profileId?: string,
+    browserUseApiKey?: string,
+    integrationAuth?: StartSessionIntegrationAuth
+  ): void {
     console.log(`[session:${this.id}] Session started`);
     this.audioChunkCount = 0;
     this.hasFinalizedRun = false;
     this.narrationSequence = 0;
     this.browserProfileId = normalizeProfileId(profileId);
     this.browserUseApiKeyOverride = normalizeBrowserUseApiKey(browserUseApiKey);
+    this.integrationAuthOverride = normalizeIntegrationAuth(integrationAuth);
 
     this.persistNonBlocking(
       this.persistence.startSession({ sessionId: this.id }),
@@ -218,26 +218,21 @@ export class Session {
     }
 
     const transcript = this.accumulatedTranscript.trim();
-    console.log(`[session:${this.id}] Transcript (${transcript.length} chars): "${transcript}" (state: ${this.state})`);
-    if (!transcript) {
-      console.warn(`[session:${this.id}] Empty transcript — STT may not have flushed in time`);
-    }
+    console.log(`[session:${this.id}] Transcript: "${transcript}" (state: ${this.state})`);
     if (transcript) {
       await handleTranscriptFinal(
         this,
         this.ai,
         env.ELEVEN_LABS_API_KEY,
         transcript,
-        this.conversationHistory,
         env.NAVIGATION_ALLOWLIST,
         {
-          browserApiKey: this.browserUseApiKeyOverride ?? env.BROWSER_USE_API_KEY,
-          browserApiKeySource: this.browserUseApiKeyOverride ? "user" : "server",
           createBrowserAdapter: () =>
             new BrowserAdapter(
               this.browserUseApiKeyOverride ?? env.BROWSER_USE_API_KEY,
               {
-                profileId: this.browserProfileId ?? env.BROWSER_USE_PROFILE_ID ?? null,
+                profileId: this.browserProfileId,
+                integrationAuth: this.integrationAuthOverride,
               }
             ),
         }
@@ -259,7 +254,6 @@ export class Session {
       this.browserAdapter = null;
     }
 
-    this.conversationHistory = createEmptyHistory();
     this.finishSession("interrupted");
     this.endSession("interrupted");
     this.setState("idle");
@@ -409,4 +403,65 @@ function normalizeBrowserUseApiKey(raw: string | undefined): string | null {
   }
 
   return trimmed;
+}
+
+function normalizeIntegrationAuth(
+  raw: StartSessionIntegrationAuth | undefined
+): StartSessionIntegrationAuth {
+  if (!raw || typeof raw !== "object") {
+    return {};
+  }
+
+  const integrationNamePattern = /^[\w .:@/-]{1,80}$/;
+  const fieldIdPattern = /^[A-Za-z0-9_-]{1,80}$/;
+  const entries: Array<[string, StartSessionIntegrationAuth[string]]> = [];
+
+  for (const [integrationName, entry] of Object.entries(raw)) {
+    if (entries.length >= 256 || !entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const normalizedIntegrationName = integrationName.trim();
+    if (!integrationNamePattern.test(normalizedIntegrationName)) {
+      continue;
+    }
+
+    const oauthConnected = entry.oauthConnected === true;
+    const apiKeyEntries: Array<[string, string]> = [];
+    const apiKeyValues = entry.apiKeyValues;
+    if (apiKeyValues && typeof apiKeyValues === "object") {
+      for (const [fieldId, fieldValue] of Object.entries(apiKeyValues)) {
+        if (apiKeyEntries.length >= 24 || typeof fieldValue !== "string") {
+          continue;
+        }
+
+        const normalizedFieldId = fieldId.trim();
+        const normalizedFieldValue = fieldValue.trim().slice(0, 4096);
+        if (
+          !fieldIdPattern.test(normalizedFieldId) ||
+          normalizedFieldValue.length === 0
+        ) {
+          continue;
+        }
+
+        apiKeyEntries.push([normalizedFieldId, normalizedFieldValue]);
+      }
+    }
+
+    if (!oauthConnected && apiKeyEntries.length === 0) {
+      continue;
+    }
+
+    entries.push([
+      normalizedIntegrationName,
+      {
+        ...(oauthConnected ? { oauthConnected: true } : {}),
+        ...(apiKeyEntries.length > 0
+          ? { apiKeyValues: Object.fromEntries(apiKeyEntries) }
+          : {}),
+      },
+    ]);
+  }
+
+  return Object.fromEntries(entries);
 }

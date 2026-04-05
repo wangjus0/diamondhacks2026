@@ -24,7 +24,7 @@ test("classifyIntent returns search result when confidence is high", async () =>
     JSON.stringify({
       intent: "search",
       confidence: 0.91,
-      query: "ignored by classifier",
+      query: "find Murmur winners and summarize key details",
     })
   );
 
@@ -33,7 +33,7 @@ test("classifyIntent returns search result when confidence is high", async () =>
   assert.deepEqual(result, {
     intent: "search",
     confidence: 0.91,
-    query: "search for Murmur winners",
+    query: "find Murmur winners and summarize key details",
   });
 });
 
