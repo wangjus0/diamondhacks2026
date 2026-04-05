@@ -239,7 +239,7 @@ export function App() {
   const { user, signOut, authError, clearAuthError } = useAuth();
   const supabase = useMemo(() => getSupabaseClient(), []);
   const audioPlayer = useAudioPlayer();
-  useSession(audioPlayer);
+  useSession(audioPlayer, user?.id ?? null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceView>("home");
   const [settingsData, setSettingsData] = useState<OnboardingFormData | null>(null);
