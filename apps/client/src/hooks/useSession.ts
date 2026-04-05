@@ -35,6 +35,7 @@ export function useSession(
       switch (event.type) {
         case "session_started":
           store.getState().clearActionTimeline();
+          store.getState().clearConversationHistory();
           store.getState().setSessionId(event.sessionId);
           store.getState().setConnected(true);
           store.getState().addActionTimelineItem({
@@ -55,6 +56,7 @@ export function useSession(
         case "transcript_final":
           store.getState().setTranscriptPartial("");
           store.getState().addTranscriptFinal(event.text);
+          store.getState().addConversationQuestion(event.text);
           break;
         case "intent":
           store.getState().setIntent(event.intent);
@@ -72,6 +74,7 @@ export function useSession(
           break;
         case "narration_text":
           store.getState().setNarrationText(event.text);
+          store.getState().setLatestConversationAnswer(event.text);
           store.getState().addActionTimelineItem({
             kind: "narration",
             message: event.text,
