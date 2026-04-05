@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEFAULT_AUTH_REDIRECT_URL,
+  enforceOAuthRedirectTarget,
   resolveAuthRedirectUrl,
 } from "../../apps/client/src/features/auth/redirect.ts";
 
@@ -38,4 +39,29 @@ test("resolveAuthRedirectUrl falls back to default when override is not desktop 
   });
 
   assert.equal(redirectUrl, DEFAULT_AUTH_REDIRECT_URL);
+});
+
+test("enforceOAuthRedirectTarget sets redirect_to on Supabase authorize URLs", () => {
+  const authUrl =
+    "https://widbrlxfiolngkncgbkm.supabase.co/auth/v1/authorize?provider=google";
+  const result = enforceOAuthRedirectTarget(authUrl, DEFAULT_AUTH_REDIRECT_URL);
+  const parsed = new URL(result);
+
+  assert.equal(parsed.searchParams.get("redirect_to"), DEFAULT_AUTH_REDIRECT_URL);
+});
+
+test("enforceOAuthRedirectTarget overwrites existing redirect_to parameter", () => {
+  const authUrl =
+    "https://widbrlxfiolngkncgbkm.supabase.co/auth/v1/authorize?provider=google&redirect_to=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fcallback";
+  const result = enforceOAuthRedirectTarget(authUrl, DEFAULT_AUTH_REDIRECT_URL);
+  const parsed = new URL(result);
+
+  assert.equal(parsed.searchParams.get("redirect_to"), DEFAULT_AUTH_REDIRECT_URL);
+});
+
+test("enforceOAuthRedirectTarget leaves non-Supabase authorize URLs unchanged", () => {
+  const authUrl = "https://example.com/login?provider=google";
+  const result = enforceOAuthRedirectTarget(authUrl, DEFAULT_AUTH_REDIRECT_URL);
+
+  assert.equal(result, authUrl);
 });

@@ -1,9 +1,10 @@
 import { env } from "./config/env.js";
 import { GoogleGenAI } from "@google/genai";
-import express from "express";
+import express, { type RequestHandler } from "express";
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { registerReplayRoutes } from "./http/replay-routes.js";
+import { buildDesktopOAuthCallbackUrl } from "./http/auth-callback.js";
 import { SessionMemoryStore } from "./memory/session-memory-store.js";
 import { SessionPersistenceService } from "./modules/session/session-persistence-service.js";
 import { SupabaseSessionPersistence } from "./persistence/supabase-session-persistence.js";
@@ -33,6 +34,20 @@ if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+const handleDesktopOAuthCallbackRedirect: RequestHandler = (req, res, next) => {
+  const requestUrl = new URL(req.originalUrl, `http://${req.headers.host ?? `localhost:${env.PORT}`}`);
+  const desktopCallbackUrl = buildDesktopOAuthCallbackUrl(requestUrl);
+  if (!desktopCallbackUrl) {
+    next();
+    return;
+  }
+
+  res.redirect(302, desktopCallbackUrl);
+};
+
+app.get("/", handleDesktopOAuthCallbackRedirect);
+app.get("/auth/callback", handleDesktopOAuthCallbackRedirect);
 
 // -- HTTP + WebSocket server --
 const server = createServer(app);

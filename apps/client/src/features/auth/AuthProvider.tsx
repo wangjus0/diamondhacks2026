@@ -4,6 +4,7 @@ import { getSupabaseClient } from "../../lib/supabase";
 import { parseOAuthCallback } from "./oauth";
 import {
   buildRedirectConfigurationError,
+  enforceOAuthRedirectTarget,
   isRedirectConfigurationError,
   resolveAuthRedirectUrl,
 } from "./redirect";
@@ -278,7 +279,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await authApi.startGoogleOAuth(data.url);
+      const oauthUrl = enforceOAuthRedirectTarget(data.url, authRedirectUrl);
+      await authApi.startGoogleOAuth(oauthUrl);
     } catch (error) {
       clearGoogleOAuthFlow();
       const message = error instanceof Error ? error.message : "Failed to open Google OAuth flow.";

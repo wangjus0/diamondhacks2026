@@ -167,3 +167,36 @@ test("close finalizes run as disconnected when no terminal event happened", asyn
   assert.equal(calls.finish[0]?.sessionId, session.id);
   assert.equal(calls.finish[0]?.status, "disconnected");
 });
+
+test("session disables Supabase persistence after missing-table error", async () => {
+  const ws = new MockWebSocket();
+  let startCalls = 0;
+
+  const persistence: SessionPersistence = {
+    async startSession() {
+      startCalls += 1;
+      throw new Error(
+        "Supabase request failed (POST session_runs): 404 {\"code\":\"PGRST205\",\"message\":\"Could not find the table 'public.session_runs' in the schema cache\"}"
+      );
+    },
+    async appendTranscriptFinal() {},
+    async appendActionEvent() {},
+    async appendNarrationText() {},
+    async finishSession() {},
+    async listSessions() {
+      return [];
+    },
+    async getSessionReplay() {
+      return null;
+    },
+  };
+
+  await createSession(ws, persistence);
+
+  ws.emit("message", JSON.stringify({ type: "start_session" }));
+  await flushAsyncWork();
+  ws.emit("message", JSON.stringify({ type: "start_session" }));
+  await flushAsyncWork();
+
+  assert.equal(startCalls, 1);
+});

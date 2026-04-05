@@ -23,11 +23,11 @@ test("blur does not hide popover during initial background grace period", () => 
   assert.equal(result, false);
 });
 
-test("blur hides popover after background grace period elapses", () => {
+test("blur does not hide popover after background grace period elapses", () => {
   const result = shouldHideVoicePopoverOnBlur({
     openedFromBackground: true,
     millisecondsSinceShow: BACKGROUND_BLUR_GRACE_PERIOD_MS,
   });
 
-  assert.equal(result, true);
+  assert.equal(result, false);
 });

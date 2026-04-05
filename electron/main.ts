@@ -300,6 +300,10 @@ function getOrCreateVoicePopover(): BrowserWindow {
       return;
     }
 
+    if (voicePopoverOpenedFromBackground) {
+      return;
+    }
+
     if (pendingVoicePopoverBlurHideTimer !== null) {
       clearTimeout(pendingVoicePopoverBlurHideTimer);
     }

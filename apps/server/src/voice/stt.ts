@@ -54,8 +54,9 @@ export class SttAdapter {
         reject(err);
       });
 
-      this.ws.on("close", () => {
-        console.log("[STT] Connection closed");
+      this.ws.on("close", (code, reasonBuffer) => {
+        const reasonText = reasonBuffer.toString() || "no reason provided";
+        console.log(`[STT] Connection closed (code=${code}, reason=${reasonText})`);
         this.ws = null;
       });
     });

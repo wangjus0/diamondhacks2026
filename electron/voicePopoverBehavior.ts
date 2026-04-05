@@ -9,9 +9,11 @@ export function shouldHideVoicePopoverOnBlur({
   openedFromBackground,
   millisecondsSinceShow,
 }: VoicePopoverBlurDecisionInput): boolean {
+  void millisecondsSinceShow;
+
   if (!openedFromBackground) {
     return true;
   }
 
-  return millisecondsSinceShow >= BACKGROUND_BLUR_GRACE_PERIOD_MS;
+  return false;
 }

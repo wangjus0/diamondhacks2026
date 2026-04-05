@@ -39,5 +39,5 @@ export function resolveSessionSocketUrl({
     return normalizedDesktopSocketUrl;
   }
 
-  return "ws://localhost:3000/ws";
+  return "ws://127.0.0.1:3000/ws";
 }

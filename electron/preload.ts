@@ -18,7 +18,7 @@ const desktopApi = Object.freeze({
     }
 
     const serverPort = process.env.PORT?.trim() || "3000";
-    return `ws://localhost:${serverPort}/ws`;
+    return `ws://127.0.0.1:${serverPort}/ws`;
   },
   getSupabaseConfig: () => Object.freeze(readSupabasePublicConfig()),
   shortcut: {

@@ -25,7 +25,7 @@ test("resolveSessionSocketUrl uses desktop socket URL for file renderer", () => 
   assert.equal(result, "ws://localhost:3000/ws");
 });
 
-test("resolveSessionSocketUrl falls back to localhost server for file renderer", () => {
+test("resolveSessionSocketUrl falls back to loopback server for file renderer", () => {
   const result = resolveSessionSocketUrl({
     locationLike: {
       protocol: "file:",
@@ -33,5 +33,5 @@ test("resolveSessionSocketUrl falls back to localhost server for file renderer",
     },
   });
 
-  assert.equal(result, "ws://localhost:3000/ws");
+  assert.equal(result, "ws://127.0.0.1:3000/ws");
 });

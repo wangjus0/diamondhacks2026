@@ -52,6 +52,7 @@ export class Session {
   private narrationSequence = 0;
   private browserAdapter: BrowserAdapter | null = null;
   private hasEnded = false;
+  private isPersistenceDisabled = false;
 
   constructor(
     ws: WebSocket,
@@ -284,8 +285,25 @@ export class Session {
 
   private persistNonBlocking(task: Promise<void>, operation: string): void {
     void task.catch((error) => {
+      if (isSupabaseMissingTableError(error)) {
+        this.disablePersistence();
+        console.warn(
+          `[session:${this.id}] Disabling Supabase persistence for this session because required tables are missing.`
+        );
+        return;
+      }
+
       console.error(`[session:${this.id}] Failed to ${operation}:`, error);
     });
+  }
+
+  private disablePersistence(): void {
+    if (this.isPersistenceDisabled) {
+      return;
+    }
+
+    this.isPersistenceDisabled = true;
+    this.persistence = NOOP_PERSISTENCE;
   }
 
   private endSession(
@@ -315,4 +333,15 @@ function normalizeRawSocketData(raw: RawData): string {
   }
 
   return raw.toString("utf-8");
+}
+
+function isSupabaseMissingTableError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes("PGRST205") ||
+    error.message.includes("Could not find the table")
+  );
 }
