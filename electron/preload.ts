@@ -36,6 +36,7 @@ const desktopApi = Object.freeze({
   },
   permissions: {
     requestMicrophoneAccess: () => ipcRenderer.invoke("permissions:request-microphone-access"),
+    getMicrophoneAccessStatus: () => ipcRenderer.invoke("permissions:get-microphone-access-status"),
     openMicrophoneSettings: () => ipcRenderer.invoke("permissions:open-microphone-settings"),
   },
 });

@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback } from "react";
 import { float32ToPcm16Base64 } from "../../lib/audio-utils";
+import {
+  getSilentCaptureErrorMessage,
+  MICROPHONE_FRAME_WATCHDOG_MS,
+  shouldTreatCaptureAsSilent,
+} from "./microphoneCaptureHealth";
 
 interface UseMicrophoneOptions {
   onAudioChunk: (base64: string) => void;
@@ -40,6 +45,40 @@ export function useMicrophone({
   const ctxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const captureStartedAtMsRef = useRef<number | null>(null);
+  const hasReceivedAudioFrameRef = useRef(false);
+  const captureWatchdogTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCaptureWatchdog = useCallback(() => {
+    if (captureWatchdogTimeoutRef.current !== null) {
+      clearTimeout(captureWatchdogTimeoutRef.current);
+      captureWatchdogTimeoutRef.current = null;
+    }
+  }, []);
+
+  const stopActiveRecording = useCallback(
+    (notifyStop: boolean) => {
+      clearCaptureWatchdog();
+
+      processorRef.current?.disconnect();
+      void ctxRef.current?.close();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+
+      processorRef.current = null;
+      ctxRef.current = null;
+      streamRef.current = null;
+      captureStartedAtMsRef.current = null;
+      hasReceivedAudioFrameRef.current = false;
+
+      setIsRecording(false);
+      onAudioLevel?.(0);
+
+      if (notifyStop) {
+        onStop();
+      }
+    },
+    [clearCaptureWatchdog, onAudioLevel, onStop]
+  );
 
   const startRecording = useCallback(async (): Promise<boolean> => {
     const desktopPermissions = window.desktop?.permissions;
@@ -79,6 +118,7 @@ export function useMicrophone({
       processor = ctx.createScriptProcessor(4096, 1, 1);
 
       processor.onaudioprocess = (e) => {
+        hasReceivedAudioFrameRef.current = true;
         const samples = e.inputBuffer.getChannelData(0);
         const meanSquare = samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length;
         const rms = Math.sqrt(meanSquare);
@@ -95,30 +135,47 @@ export function useMicrophone({
       ctxRef.current = ctx;
       streamRef.current = stream;
       processorRef.current = processor;
+      captureStartedAtMsRef.current = Date.now();
+      hasReceivedAudioFrameRef.current = false;
       setIsRecording(true);
       onAudioLevel?.(0);
+
+      clearCaptureWatchdog();
+      captureWatchdogTimeoutRef.current = setTimeout(() => {
+        const startedAtMs = captureStartedAtMsRef.current;
+        if (startedAtMs === null) {
+          return;
+        }
+
+        const elapsedMs = Date.now() - startedAtMs;
+        const shouldFailCapture = shouldTreatCaptureAsSilent({
+          elapsedMs,
+          hasReceivedAudioFrame: hasReceivedAudioFrameRef.current,
+        });
+        if (!shouldFailCapture) {
+          return;
+        }
+
+        onError?.(getSilentCaptureErrorMessage());
+        stopActiveRecording(true);
+      }, MICROPHONE_FRAME_WATCHDOG_MS);
+
       return true;
     } catch (error) {
+      clearCaptureWatchdog();
+      captureStartedAtMsRef.current = null;
+      hasReceivedAudioFrameRef.current = false;
       processor?.disconnect();
       await ctx?.close();
       stream?.getTracks().forEach((track) => track.stop());
       onError?.(getMicrophoneErrorMessage(error));
       return false;
     }
-  }, [onAudioChunk, onAudioLevel, onError]);
+  }, [clearCaptureWatchdog, onAudioChunk, onAudioLevel, onError, stopActiveRecording]);
 
   const stopRecording = useCallback(() => {
-    processorRef.current?.disconnect();
-    ctxRef.current?.close();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-
-    processorRef.current = null;
-    ctxRef.current = null;
-    streamRef.current = null;
-    setIsRecording(false);
-    onAudioLevel?.(0);
-    onStop();
-  }, [onAudioLevel, onStop]);
+    stopActiveRecording(true);
+  }, [stopActiveRecording]);
 
   return { startRecording, stopRecording, isRecording };
 }

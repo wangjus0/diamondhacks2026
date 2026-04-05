@@ -4,11 +4,16 @@ import { app, BrowserWindow, globalShortcut, ipcMain, session, shell, safeStorag
 import { readSupabasePublicConfig, type SupabasePublicConfig } from "./supabaseConfig";
 import { createMainWindow, getMainWindow } from "./windows/mainWindow";
 import { createVoicePopoverWindow } from "./windows/voicePopoverWindow";
+import { BACKGROUND_BLUR_GRACE_PERIOD_MS, shouldHideVoicePopoverOnBlur } from "./voicePopoverBehavior";
+import { isMicrophonePermission, isTrustedMicrophoneRequest } from "./permissions/mediaPermissions";
 
 let appReady = false;
 let pendingOAuthCallbackUrl: string | null = null;
 let volatileSessionStore: SessionStoreData = {};
 let voicePopoverWindow: BrowserWindow | null = null;
+let voicePopoverOpenedAtMs: number | null = null;
+let voicePopoverOpenedFromBackground = false;
+let pendingVoicePopoverBlurHideTimer: NodeJS.Timeout | null = null;
 
 const GLOBAL_SHORTCUT = "CommandOrControl+Shift+Space";
 const DASHBOARD_SHORTCUT = "CommandOrControl+Shift+M";
@@ -16,49 +21,34 @@ const DASHBOARD_SHORTCUT = "CommandOrControl+Shift+M";
 const APP_PROTOCOL = "murmur";
 const OAUTH_CALLBACK_EVENT = "auth:oauth-callback";
 const AUTH_STORE_FILENAME = "auth-session-store.bin";
-const TRUSTED_RENDERER_ORIGINS = new Set(["http://localhost:5173"]);
-
-function isTrustedRendererUrl(rawUrl: string): boolean {
-  if (!rawUrl) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(rawUrl);
-    if (parsed.protocol === "file:") {
-      return true;
-    }
-
-    return TRUSTED_RENDERER_ORIGINS.has(parsed.origin);
-  } catch {
-    return false;
-  }
-}
-
-function isMicrophonePermission(permission: string): boolean {
-  return permission === "audioCapture" || permission === "microphone" || permission === "media";
-}
 
 function registerMediaPermissionHandlers(): void {
   const defaultSession = session.defaultSession;
 
-  defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin, details) => {
+  defaultSession.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
     if (!isMicrophonePermission(permission)) {
       return false;
     }
 
-    const requestUrl = details?.requestingUrl ?? requestingOrigin;
-    return isTrustedRendererUrl(requestUrl);
+    return isTrustedMicrophoneRequest({
+      requestingUrl: details?.requestingUrl,
+      requestingOrigin,
+      webContentsUrl: wc?.getURL(),
+    });
   });
 
-  defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+  defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
     if (!isMicrophonePermission(permission)) {
       callback(false);
       return;
     }
 
-    const requestUrl = details?.requestingUrl ?? "";
-    callback(isTrustedRendererUrl(requestUrl));
+    callback(
+      isTrustedMicrophoneRequest({
+        requestingUrl: details?.requestingUrl,
+        webContentsUrl: wc?.getURL(),
+      })
+    );
   });
 }
 
@@ -156,8 +146,16 @@ function dispatchOAuthCallback(rawUrl: string): void {
   }
 
   pendingOAuthCallbackUrl = callbackUrl;
+  emitPendingOAuthCallback();
+}
+
+function emitPendingOAuthCallback(): void {
+  if (!pendingOAuthCallbackUrl || !app.isReady()) {
+    return;
+  }
+
   const win = getMainWindow() ?? createMainWindow();
-  win.webContents.send(OAUTH_CALLBACK_EVENT, callbackUrl);
+  win.webContents.send(OAUTH_CALLBACK_EVENT, pendingOAuthCallbackUrl);
   win.show();
   win.focus();
 }
@@ -239,6 +237,18 @@ function registerAuthIpcHandlers(config: SupabasePublicConfig): void {
     }
   });
 
+  ipcMain.handle("permissions:get-microphone-access-status", () => {
+    if (typeof systemPreferences.getMediaAccessStatus !== "function") {
+      return "unsupported";
+    }
+
+    try {
+      return systemPreferences.getMediaAccessStatus("microphone");
+    } catch {
+      return "unknown";
+    }
+  });
+
   ipcMain.handle("permissions:open-microphone-settings", async () => {
     if (process.platform === "darwin") {
       await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone");
@@ -277,9 +287,46 @@ function getOrCreateVoicePopover(): BrowserWindow {
 
   voicePopoverWindow = createVoicePopoverWindow();
   voicePopoverWindow.on("blur", () => {
-    hideVoicePopover();
+    if (!voicePopoverWindow || voicePopoverWindow.isDestroyed() || !voicePopoverWindow.isVisible()) {
+      return;
+    }
+
+    const millisecondsSinceShow = voicePopoverOpenedAtMs === null ? Number.POSITIVE_INFINITY : Date.now() - voicePopoverOpenedAtMs;
+    const shouldHide = shouldHideVoicePopoverOnBlur({
+      openedFromBackground: voicePopoverOpenedFromBackground,
+      millisecondsSinceShow,
+    });
+
+    if (shouldHide) {
+      hideVoicePopover();
+      return;
+    }
+
+    if (pendingVoicePopoverBlurHideTimer !== null) {
+      clearTimeout(pendingVoicePopoverBlurHideTimer);
+    }
+
+    const remainingGraceMs = Math.max(0, BACKGROUND_BLUR_GRACE_PERIOD_MS - millisecondsSinceShow);
+    pendingVoicePopoverBlurHideTimer = setTimeout(() => {
+      pendingVoicePopoverBlurHideTimer = null;
+
+      if (!voicePopoverWindow || voicePopoverWindow.isDestroyed() || !voicePopoverWindow.isVisible()) {
+        return;
+      }
+
+      if (!voicePopoverWindow.isFocused()) {
+        hideVoicePopover();
+      }
+    }, remainingGraceMs);
   });
   voicePopoverWindow.on("closed", () => {
+    if (pendingVoicePopoverBlurHideTimer !== null) {
+      clearTimeout(pendingVoicePopoverBlurHideTimer);
+      pendingVoicePopoverBlurHideTimer = null;
+    }
+
+    voicePopoverOpenedAtMs = null;
+    voicePopoverOpenedFromBackground = false;
     voicePopoverWindow = null;
   });
 
@@ -290,8 +337,15 @@ function toggleVoicePopover(): void {
   const win = getOrCreateVoicePopover();
 
   if (win.isVisible()) {
-    win.hide();
+    hideVoicePopover();
   } else {
+    if (pendingVoicePopoverBlurHideTimer !== null) {
+      clearTimeout(pendingVoicePopoverBlurHideTimer);
+      pendingVoicePopoverBlurHideTimer = null;
+    }
+
+    voicePopoverOpenedAtMs = Date.now();
+    voicePopoverOpenedFromBackground = BrowserWindow.getFocusedWindow() === null;
     win.show();
     win.focus();
   }
@@ -316,6 +370,14 @@ function toggleMainWindow(): void {
 }
 
 function hideVoicePopover(): void {
+  if (pendingVoicePopoverBlurHideTimer !== null) {
+    clearTimeout(pendingVoicePopoverBlurHideTimer);
+    pendingVoicePopoverBlurHideTimer = null;
+  }
+
+  voicePopoverOpenedAtMs = null;
+  voicePopoverOpenedFromBackground = false;
+
   if (voicePopoverWindow && !voicePopoverWindow.isDestroyed() && voicePopoverWindow.isVisible()) {
     voicePopoverWindow.hide();
   }
@@ -355,9 +417,17 @@ async function bootstrap(): Promise<void> {
   registerShortcutIpcHandlers();
   registerMediaPermissionHandlers();
   createMainWindow();
+  emitPendingOAuthCallback();
 
-  globalShortcut.register(GLOBAL_SHORTCUT, toggleVoicePopover);
-  globalShortcut.register(DASHBOARD_SHORTCUT, toggleMainWindow);
+  const registeredVoiceShortcut = globalShortcut.register(GLOBAL_SHORTCUT, toggleVoicePopover);
+  if (!registeredVoiceShortcut || !globalShortcut.isRegistered(GLOBAL_SHORTCUT)) {
+    console.error("[electron] Failed to register global shortcut:", GLOBAL_SHORTCUT);
+  }
+
+  const registeredDashboardShortcut = globalShortcut.register(DASHBOARD_SHORTCUT, toggleMainWindow);
+  if (!registeredDashboardShortcut || !globalShortcut.isRegistered(DASHBOARD_SHORTCUT)) {
+    console.error("[electron] Failed to register global shortcut:", DASHBOARD_SHORTCUT);
+  }
 
   app.on("activate", () => {
     if (appReady && app.isReady() && process.platform === "darwin") {

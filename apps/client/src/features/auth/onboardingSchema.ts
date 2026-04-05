@@ -1,6 +1,19 @@
-export type StepKey = "account" | "workflow" | "preferences";
+export type MicrophoneAccessStatus =
+  | "granted"
+  | "denied"
+  | "not-determined"
+  | "restricted"
+  | "unknown"
+  | "unsupported";
+
+export type StepKey = "permissions" | "account" | "workflow" | "preferences";
 
 export type OnboardingFormData = {
+  permissions: {
+    assistantAccess: "granted" | "pending";
+    microphoneAccess: MicrophoneAccessStatus;
+    screenAccess: "granted" | "pending";
+  };
   account: {
     displayName: string;
     workspaceName: string;
@@ -48,10 +61,21 @@ function maxLength(max: number, message: string): FieldValidator {
 }
 
 const SCHEMA: {
+  permissions: StepSchema<OnboardingFormData["permissions"]>;
   account: StepSchema<OnboardingFormData["account"]>;
   workflow: StepSchema<OnboardingFormData["workflow"]>;
   preferences: StepSchema<OnboardingFormData["preferences"]>;
 } = {
+  permissions: {
+    assistantAccess: [],
+    microphoneAccess: [
+      (value) =>
+        value === "granted" || value === "unsupported"
+          ? null
+          : "Please enable microphone access to continue.",
+    ],
+    screenAccess: [],
+  },
   account: {
     displayName: [required, maxLength(80, "Display name must be 80 characters or fewer.")],
     workspaceName: [required, maxLength(120, "Workspace name must be 120 characters or fewer.")],
@@ -66,10 +90,15 @@ const SCHEMA: {
   },
 };
 
-export const STEP_ORDER: StepKey[] = ["account", "workflow", "preferences"];
+export const STEP_ORDER: StepKey[] = ["permissions", "account", "workflow", "preferences"];
 
 export function createDefaultOnboardingData(): OnboardingFormData {
   return {
+    permissions: {
+      assistantAccess: "pending",
+      microphoneAccess: "not-determined",
+      screenAccess: "pending",
+    },
     account: {
       displayName: "",
       workspaceName: "",
@@ -100,8 +129,28 @@ export function mergePersistedOnboardingData(raw: unknown): OnboardingFormData {
   const account = steps.account ?? {};
   const workflow = steps.workflow ?? {};
   const preferences = steps.preferences ?? {};
+  const permissions = steps.permissions ?? {};
+
+  const persistedMicrophoneAccess =
+    typeof permissions.microphoneAccess === "string" ? permissions.microphoneAccess : "not-determined";
+
+  const microphoneAccess: MicrophoneAccessStatus =
+    persistedMicrophoneAccess === "granted" ||
+    persistedMicrophoneAccess === "denied" ||
+    persistedMicrophoneAccess === "not-determined" ||
+    persistedMicrophoneAccess === "restricted" ||
+    persistedMicrophoneAccess === "unknown" ||
+    persistedMicrophoneAccess === "unsupported"
+      ? persistedMicrophoneAccess
+      : "not-determined";
 
   return {
+    permissions: {
+      assistantAccess:
+        permissions.assistantAccess === "granted" ? "granted" : defaults.permissions.assistantAccess,
+      microphoneAccess,
+      screenAccess: permissions.screenAccess === "granted" ? "granted" : defaults.permissions.screenAccess,
+    },
     account: {
       displayName: typeof account.displayName === "string" ? account.displayName : defaults.account.displayName,
       workspaceName: typeof account.workspaceName === "string" ? account.workspaceName : defaults.account.workspaceName,
@@ -126,20 +175,23 @@ export function deriveCurrentStep(raw: unknown): number {
   }
 
   const payload = raw as Partial<OnboardingPayload>;
+  const schemaVersion = payload.schemaVersion;
   const currentStep = payload.currentStep;
   if (typeof currentStep !== "number" || Number.isNaN(currentStep)) {
     return 0;
   }
 
-  if (currentStep < 0) {
+  const migratedStep = schemaVersion === 1 ? currentStep + 1 : currentStep;
+
+  if (migratedStep < 0) {
     return 0;
   }
 
-  if (currentStep >= STEP_ORDER.length) {
+  if (migratedStep >= STEP_ORDER.length) {
     return STEP_ORDER.length - 1;
   }
 
-  return Math.floor(currentStep);
+  return Math.floor(migratedStep);
 }
 
 export function validateStep(step: StepKey, data: OnboardingFormData): StepErrors {
@@ -160,7 +212,7 @@ export function validateStep(step: StepKey, data: OnboardingFormData): StepError
 
 export function createPayload(currentStep: number, data: OnboardingFormData): OnboardingPayload {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     currentStep,
     steps: data,
   };

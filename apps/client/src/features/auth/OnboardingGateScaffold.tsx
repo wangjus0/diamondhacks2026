@@ -7,10 +7,12 @@ import {
   deriveCurrentStep,
   mergePersistedOnboardingData,
   validateStep,
+  type MicrophoneAccessStatus,
   type OnboardingFormData,
   type StepErrors,
   type StepKey,
 } from "./onboardingSchema";
+import { isMicrophoneAccessSatisfied, normalizeMicrophoneAccessStatus } from "./microphonePermission";
 
 type OnboardingGateScaffoldProps = {
   onCompleted: () => void;
@@ -30,6 +32,11 @@ type StepMeta = {
 
 const STEP_META: StepMeta[] = [
   {
+    key: "permissions",
+    title: "Permissions",
+    description: "Enable assistant and microphone access before starting your first session.",
+  },
+  {
     key: "account",
     title: "Account basics",
     description: "Placeholder fields for profile and workspace metadata.",
@@ -47,6 +54,7 @@ const STEP_META: StepMeta[] = [
 ];
 
 const INITIAL_STEP_ERRORS: Record<StepKey, StepErrors> = {
+  permissions: {},
   account: {},
   workflow: {},
   preferences: {},
@@ -60,6 +68,101 @@ function InlineError({ message, id }: { message?: string; id: string }) {
   }
 
   return <p id={id} className="field-error">{message}</p>;
+}
+
+const MICROPHONE_STATUS_LABEL: Record<MicrophoneAccessStatus, string> = {
+  granted: "Granted",
+  denied: "Denied",
+  restricted: "Restricted",
+  "not-determined": "Not requested",
+  unsupported: "Unsupported",
+  unknown: "Unknown",
+};
+
+function PermissionStep(props: {
+  data: OnboardingFormData["permissions"];
+  errors: StepErrors;
+  onAssistantAccessChange: (value: "granted" | "pending") => void;
+  onScreenAccessChange: (value: "granted" | "pending") => void;
+  onRequestMicrophoneAccess: () => Promise<void>;
+  onCheckMicrophoneStatus: () => Promise<void>;
+  onOpenMicrophoneSettings: () => Promise<void>;
+  checkingStatus: boolean;
+}) {
+  return (
+    <div className="permission-stack">
+      <div className="permission-item">
+        <div>
+          <h3 className="permission-item-title">Allow Murmur to assist</h3>
+          <p className="permission-item-copy">Enable helper prompts and contextual guidance while you work.</p>
+        </div>
+        <button
+          type="button"
+          className={`permission-toggle ${props.data.assistantAccess === "granted" ? "permission-toggle-on" : ""}`}
+          aria-label="Allow Murmur to assist"
+          onClick={() => {
+            props.onAssistantAccessChange(props.data.assistantAccess === "granted" ? "pending" : "granted");
+          }}
+          aria-pressed={props.data.assistantAccess === "granted"}
+        />
+      </div>
+
+      <div className="permission-item">
+        <div>
+          <h3 className="permission-item-title">Allow microphone access</h3>
+          <p className="permission-item-copy">Murmur needs microphone access to capture voice commands.</p>
+          <p className="permission-status">Status: {MICROPHONE_STATUS_LABEL[props.data.microphoneAccess]}</p>
+          <InlineError id="microphone-access-error" message={props.errors.microphoneAccess} />
+        </div>
+        <div className="permission-item-actions">
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => {
+              void props.onRequestMicrophoneAccess();
+            }}
+          >
+            Request access
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              void props.onCheckMicrophoneStatus();
+            }}
+            disabled={props.checkingStatus}
+          >
+            {props.checkingStatus ? "Checking..." : "Re-check"}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              void props.onOpenMicrophoneSettings();
+            }}
+          >
+            Open settings
+          </button>
+        </div>
+      </div>
+
+      <div className="permission-item">
+        <div>
+          <h3 className="permission-item-title">Allow screen context</h3>
+          <p className="permission-item-copy">Optional: let Murmur understand what is on-screen for better responses.</p>
+        </div>
+        <button
+          type="button"
+          className={`permission-toggle ${props.data.screenAccess === "granted" ? "permission-toggle-on" : ""}`}
+          aria-label="Allow screen context"
+          onClick={() => {
+            props.onScreenAccessChange(props.data.screenAccess === "granted" ? "pending" : "granted");
+          }}
+          aria-pressed={props.data.screenAccess === "granted"}
+        />
+      </div>
+    </div>
+  );
 }
 
 function AccountStep(props: {
@@ -187,6 +290,84 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
   const [stepErrors, setStepErrors] = useState<Record<StepKey, StepErrors>>(INITIAL_STEP_ERRORS);
   const [saveError, setSaveError] = useState<string | null>(initialLoadError ?? null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isCheckingPermission, setIsCheckingPermission] = useState(false);
+
+  const setMicrophoneAccess = (value: MicrophoneAccessStatus) => {
+    setFormData((previous) => ({
+      ...previous,
+      permissions: {
+        ...previous.permissions,
+        microphoneAccess: value,
+      },
+    }));
+
+    setStepErrors((previous) => {
+      const { microphoneAccess: _removed, ...remaining } = previous.permissions;
+      return {
+        ...previous,
+        permissions: remaining,
+      };
+    });
+  };
+
+  const checkMicrophoneStatus = async () => {
+    setIsCheckingPermission(true);
+    try {
+      if (window.desktop?.permissions?.getMicrophoneAccessStatus) {
+        const status = await window.desktop.permissions.getMicrophoneAccessStatus();
+        setMicrophoneAccess(normalizeMicrophoneAccessStatus(status));
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setMicrophoneAccess("unsupported");
+        return;
+      }
+
+      setMicrophoneAccess("not-determined");
+    } finally {
+      setIsCheckingPermission(false);
+    }
+  };
+
+  const requestMicrophoneAccess = async () => {
+    setSaveError(null);
+    setStatusMessage(null);
+
+    try {
+      if (window.desktop?.permissions?.requestMicrophoneAccess) {
+        const granted = await window.desktop.permissions.requestMicrophoneAccess();
+        setMicrophoneAccess(granted ? "granted" : "denied");
+        setStatusMessage(granted ? "Microphone access granted." : "Microphone access denied. Open settings to enable.");
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setMicrophoneAccess("unsupported");
+        setStatusMessage("Microphone permission is not supported in this runtime.");
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => {
+        track.stop();
+      });
+      setMicrophoneAccess("granted");
+      setStatusMessage("Microphone access granted.");
+    } catch {
+      setMicrophoneAccess("denied");
+      setSaveError("Microphone access was denied. You can retry or open system settings.");
+    }
+  };
+
+  const openMicrophoneSettings = async () => {
+    if (window.desktop?.permissions?.openMicrophoneSettings) {
+      await window.desktop.permissions.openMicrophoneSettings();
+      return;
+    }
+
+    setStatusMessage("Open your browser or system privacy settings to enable microphone access.");
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -235,7 +416,23 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
     };
   }, [onCompleted, supabase, user]);
 
+  useEffect(() => {
+    if (currentStep !== 0) {
+      return;
+    }
+
+    if (formData.permissions.microphoneAccess === "granted") {
+      return;
+    }
+
+    void checkMicrophoneStatus();
+  }, [currentStep]);
+
   const activeStep = STEP_META[currentStep];
+  const assistantEnabled = formData.permissions.assistantAccess === "granted";
+  const microphoneReady = isMicrophoneAccessSatisfied(formData.permissions.microphoneAccess);
+  const screenEnabled = formData.permissions.screenAccess === "granted";
+  const permissionProgressCount = [assistantEnabled, microphoneReady, screenEnabled].filter(Boolean).length;
 
   const persistProgress = async (options: { completed: boolean; completedAt: string | null; nextStep: number }) => {
     if (!user) {
@@ -343,6 +540,12 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
       return;
     }
 
+    if (!isMicrophoneAccessSatisfied(formData.permissions.microphoneAccess)) {
+      setCurrentStep(0);
+      setSaveError("Please enable microphone access before completing onboarding.");
+      return;
+    }
+
     setSaveError(null);
     setStatusMessage(null);
     setIsSaving(true);
@@ -369,136 +572,204 @@ export function OnboardingGateScaffold({ onCompleted, initialLoadError }: Onboar
 
   return (
     <div className="screen onboarding-screen">
-      <div className="panel onboarding-card">
-        <header className="onboarding-header">
-          <p className="eyebrow">
-            Onboarding skeleton
-          </p>
-          <h1 className="onboarding-title">Set up Murmur</h1>
-          <p>
-            This is the Step 7 multi-step boilerplate. Field copy and final schema can evolve without replacing the flow.
-          </p>
-          <ol className="step-pills" aria-label="Onboarding steps">
-            {STEP_META.map((step, index) => (
-              <li
-                key={step.key}
-                className={`step-pill ${index === currentStep ? "step-pill-active" : ""}`}
-                aria-current={index === currentStep ? "step" : undefined}
-              >
-                {index + 1}. {step.title}
-              </li>
-            ))}
-          </ol>
-        </header>
+      <div className="onboarding-shell">
+        <div className="panel onboarding-card onboarding-main">
+          <header className="onboarding-header">
+            <p className="eyebrow">
+              First-time setup
+            </p>
+            <h1 className="onboarding-title">Let&apos;s get you set up</h1>
+            <p>
+              Configure your workspace in a few steps. You can save progress and return anytime.
+            </p>
+            <ol className="step-pills" aria-label="Onboarding steps">
+              {STEP_META.map((step, index) => (
+                <li
+                  key={step.key}
+                  className={`step-pill ${index === currentStep ? "step-pill-active" : ""}`}
+                  aria-current={index === currentStep ? "step" : undefined}
+                >
+                  {index + 1}. {step.title}
+                </li>
+              ))}
+            </ol>
+          </header>
 
-        <section className="section-card">
-          <div>
-            <h2 className="onboarding-step-title">{activeStep.title}</h2>
-            <p>{activeStep.description}</p>
-          </div>
+          <section className="section-card onboarding-form-card">
+            <div>
+              <h2 className="onboarding-step-title">{activeStep.title}</h2>
+              <p>{activeStep.description}</p>
+            </div>
 
-          {activeStep.key === "account" && (
-            <AccountStep
-              data={formData.account}
-              errors={stepErrors.account}
-              onDisplayNameChange={(value) => {
-                updateStepField("account", "displayName", value);
-              }}
-              onWorkspaceNameChange={(value) => {
-                updateStepField("account", "workspaceName", value);
-              }}
-            />
-          )}
-
-          {activeStep.key === "workflow" && (
-            <WorkflowStep
-              data={formData.workflow}
-              errors={stepErrors.workflow}
-              onPrimaryGoalChange={(value) => {
-                updateStepField("workflow", "primaryGoal", value);
-              }}
-              onUseCasesChange={(value) => {
-                updateStepField("workflow", "useCases", value);
-              }}
-            />
-          )}
-
-          {activeStep.key === "preferences" && (
-            <PreferencesStep
-              data={formData.preferences}
-              errors={stepErrors.preferences}
-              onShortcutBehaviorChange={(value) => {
-                updateStepField("preferences", "shortcutBehavior", value);
-              }}
-              onNotesChange={(value) => {
-                updateStepField("preferences", "notes", value);
-              }}
-            />
-          )}
-        </section>
-
-        {statusMessage && <p className="alert alert-info">{statusMessage}</p>}
-        {saveError && <p className="alert alert-danger">{saveError}</p>}
-
-        <footer className="footer-actions">
-          <div className="action-group">
-            <button
-              type="button"
-              onClick={handleBack}
-              disabled={currentStep === 0 || isSaving}
-              className="button button-secondary"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void handleSaveProgress();
-              }}
-              disabled={isSaving}
-              className="button button-secondary"
-            >
-              Save progress
-            </button>
-          </div>
-
-          <div className="action-group">
-            <button
-              type="button"
-              onClick={() => {
-                void signOut();
-              }}
-              disabled={isSaving}
-              className="button button-secondary"
-            >
-              Sign out
-            </button>
-
-            {currentStep < LAST_STEP_INDEX ? (
-              <button
-                type="button"
-                onClick={() => {
-                  void handleNext();
+            {activeStep.key === "permissions" && (
+              <PermissionStep
+                data={formData.permissions}
+                errors={stepErrors.permissions}
+                onAssistantAccessChange={(value) => {
+                  updateStepField("permissions", "assistantAccess", value);
                 }}
-                disabled={isSaving}
-                className="button button-primary"
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  void handleComplete();
+                onScreenAccessChange={(value) => {
+                  updateStepField("permissions", "screenAccess", value);
                 }}
-                disabled={isSaving}
-                className="button button-primary"
-              >
-                Complete onboarding
-              </button>
+                onRequestMicrophoneAccess={requestMicrophoneAccess}
+                onCheckMicrophoneStatus={checkMicrophoneStatus}
+                onOpenMicrophoneSettings={openMicrophoneSettings}
+                checkingStatus={isCheckingPermission}
+              />
             )}
+
+            {activeStep.key === "account" && (
+              <AccountStep
+                data={formData.account}
+                errors={stepErrors.account}
+                onDisplayNameChange={(value) => {
+                  updateStepField("account", "displayName", value);
+                }}
+                onWorkspaceNameChange={(value) => {
+                  updateStepField("account", "workspaceName", value);
+                }}
+              />
+            )}
+
+            {activeStep.key === "workflow" && (
+              <WorkflowStep
+                data={formData.workflow}
+                errors={stepErrors.workflow}
+                onPrimaryGoalChange={(value) => {
+                  updateStepField("workflow", "primaryGoal", value);
+                }}
+                onUseCasesChange={(value) => {
+                  updateStepField("workflow", "useCases", value);
+                }}
+              />
+            )}
+
+            {activeStep.key === "preferences" && (
+              <PreferencesStep
+                data={formData.preferences}
+                errors={stepErrors.preferences}
+                onShortcutBehaviorChange={(value) => {
+                  updateStepField("preferences", "shortcutBehavior", value);
+                }}
+                onNotesChange={(value) => {
+                  updateStepField("preferences", "notes", value);
+                }}
+              />
+            )}
+          </section>
+
+          {statusMessage && <p className="alert alert-info">{statusMessage}</p>}
+          {saveError && <p className="alert alert-danger">{saveError}</p>}
+
+          <footer className="footer-actions">
+            <div className="action-group">
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={currentStep === 0 || isSaving}
+                className="button button-secondary"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSaveProgress();
+                }}
+                disabled={isSaving}
+                className="button button-secondary"
+              >
+                Save progress
+              </button>
+            </div>
+
+            <div className="action-group">
+              <button
+                type="button"
+                onClick={() => {
+                  void signOut();
+                }}
+                disabled={isSaving}
+                className="button button-secondary"
+              >
+                Sign out
+              </button>
+
+              {currentStep < LAST_STEP_INDEX ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleNext();
+                  }}
+                  disabled={isSaving}
+                  className="button button-primary"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleComplete();
+                  }}
+                  disabled={isSaving}
+                  className="button button-primary"
+                >
+                  Complete onboarding
+                </button>
+              )}
+            </div>
+          </footer>
+        </div>
+
+        <aside className="onboarding-visual" aria-label="Permission guidance preview">
+          <div className="permission-dialog">
+            <p className="permission-title">Enable system access for the best Murmur experience.</p>
+            <p className="permission-copy">
+              {permissionProgressCount}/3 setup checks complete. Confirm microphone access so voice commands work reliably.
+            </p>
+            <div className="permission-actions">
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  void openMicrophoneSettings();
+                }}
+              >
+                Open System Settings
+              </button>
+              <button
+                type="button"
+                className="button button-primary"
+                onClick={() => {
+                  void requestMicrophoneAccess();
+                }}
+              >
+                Allow Microphone
+              </button>
+            </div>
           </div>
-        </footer>
+
+          <div className="system-preview">
+            <div className="system-header">Accessibility</div>
+            <div className={`system-row ${assistantEnabled ? "system-row-active" : ""}`}>
+              <span>Assistant</span>
+              <span className={`system-toggle ${assistantEnabled ? "system-toggle-on" : ""}`} />
+            </div>
+            <div className={`system-row ${microphoneReady ? "system-row-active" : ""}`}>
+              <span>Microphone</span>
+              <span className={`system-toggle ${microphoneReady ? "system-toggle-on" : ""}`} />
+            </div>
+            <div className={`system-row ${screenEnabled ? "system-row-active" : ""}`}>
+              <span>Screen context</span>
+              <span className={`system-toggle ${screenEnabled ? "system-toggle-on" : ""}`} />
+            </div>
+            <div className="system-row">
+              <span>Browser control</span>
+              <span className="system-toggle system-toggle-on" />
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );

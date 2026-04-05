@@ -40,16 +40,19 @@ export function App() {
     <div className="screen app-screen">
       <div className="app-frame">
         <aside className="app-rail" aria-label="Primary navigation">
-          <div className="rail-logo">M</div>
-          <button className="rail-item rail-item-active" aria-label="Home" type="button" />
-          <button className="rail-item" aria-label="Timeline" type="button" />
-          <button className="rail-item" aria-label="Actions" type="button" />
-          <button className="rail-item" aria-label="Settings" type="button" />
+          <div className="rail-logo" aria-hidden="true">MU</div>
+          <button className="rail-item rail-item-active" aria-label="Home" type="button">H</button>
+          <button className="rail-item" aria-label="Timeline" type="button">T</button>
+          <button className="rail-item" aria-label="Actions" type="button">A</button>
+          <button className="rail-item" aria-label="Settings" type="button">S</button>
         </aside>
 
         <div className="app-workspace">
           <header className="app-topbar">
-            <div className="app-titlebar-label">Murmur</div>
+            <div className="app-title-group">
+              <p className="app-titlebar-label">Murmur</p>
+              <p className="app-titlebar-subtitle">Voice ops dashboard</p>
+            </div>
 
             <div className="search-wrap" role="search">
               <span className="search-icon" aria-hidden="true">◦</span>
@@ -83,6 +86,17 @@ export function App() {
               <p className="subtitle">
                 Speak naturally and the assistant transcribes, reasons, and executes browser actions in real time.
               </p>
+
+              <div className="utility-grid">
+                <div className="utility-metric">
+                  <span className="utility-label">Turn State</span>
+                  <strong className="utility-value">{turnState}</strong>
+                </div>
+                <div className="utility-metric">
+                  <span className="utility-label">Queued Actions</span>
+                  <strong className="utility-value">{actionStatuses.length}</strong>
+                </div>
+              </div>
 
               {intent && (
                 <div className="alert alert-info">

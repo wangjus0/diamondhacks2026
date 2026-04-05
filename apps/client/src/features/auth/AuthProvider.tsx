@@ -213,7 +213,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    await authApi.startGoogleOAuth(data.url);
+    try {
+      await authApi.startGoogleOAuth(data.url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to open Google OAuth flow.";
+      setAuthError(message);
+    }
   }, [authRedirectUrl, supabase]);
 
   const signOut = useCallback(async () => {

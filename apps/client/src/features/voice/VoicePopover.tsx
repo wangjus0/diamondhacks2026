@@ -37,6 +37,14 @@ export function VoicePopover() {
     },
   });
 
+  const statusMessage = error
+    ? error
+    : isRecording
+      ? "Listening... press Space to stop"
+      : micDisabled
+        ? "Assistant is busy. Try again in a moment."
+        : "Press Space to start listening";
+
   const toggleRecording = useCallback(async () => {
     if (isRecording) {
       stopRecording();
@@ -95,6 +103,7 @@ export function VoicePopover() {
     const originalBodyOverflow = document.body.style.overflow;
     const originalRootOverflow = document.documentElement.style.overflow;
 
+    document.body.classList.add("voice-popover-mode");
     document.body.style.margin = "0";
     document.body.style.background = "transparent";
     document.documentElement.style.background = "transparent";
@@ -102,6 +111,7 @@ export function VoicePopover() {
     document.documentElement.style.overflow = "hidden";
 
     return () => {
+      document.body.classList.remove("voice-popover-mode");
       document.body.style.margin = originalBodyMargin;
       document.body.style.background = originalBodyBackground;
       document.documentElement.style.background = originalRootBackground;
@@ -146,6 +156,7 @@ export function VoicePopover() {
             />
           ))}
         </button>
+        <p className={`voice-popover-status ${error ? "voice-popover-status-error" : ""}`}>{statusMessage}</p>
       </section>
     </div>
   );

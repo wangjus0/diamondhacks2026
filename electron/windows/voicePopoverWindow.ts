@@ -14,7 +14,7 @@ function resolveRendererHtmlPath(): string {
 export function createVoicePopoverWindow(): BrowserWindow {
   const windowWidth = 430;
   const windowHeight = 86;
-  const edgeOffset = 24;
+  const verticalAnchorRatio = 0.75;
 
   const win = new BrowserWindow({
     width: windowWidth,
@@ -41,8 +41,8 @@ export function createVoicePopoverWindow(): BrowserWindow {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { x: workAreaX, y: workAreaY, width: workAreaWidth, height: workAreaHeight } = primaryDisplay.workArea;
   const centeredX = Math.round(workAreaX + (workAreaWidth - windowWidth) / 2);
-  const bottomY = Math.round(workAreaY + workAreaHeight - windowHeight - edgeOffset);
-  win.setPosition(centeredX, bottomY);
+  const anchoredY = Math.round(workAreaY + workAreaHeight * verticalAnchorRatio - windowHeight / 2);
+  win.setPosition(centeredX, anchoredY);
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen: true,

@@ -25,6 +25,7 @@ type DesktopAuthApi = {
 
 type DesktopPermissionsApi = {
   requestMicrophoneAccess: () => Promise<boolean>;
+  getMicrophoneAccessStatus: () => Promise<string>;
   openMicrophoneSettings: () => Promise<void>;
 };
 
