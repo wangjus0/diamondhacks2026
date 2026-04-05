@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   app,
   BrowserWindow,
@@ -74,6 +75,28 @@ const OAUTH_CALLBACK_EVENT = "auth:oauth-callback";
 const AUTH_STORE_FILENAME = "auth-session-store.bin";
 const PROFILE_SYNC_COMMAND = "curl -fsSL https://browser-use.com/profile.sh | sh";
 const PROFILE_SYNC_TIMEOUT_MS = 10 * 60 * 1000;
+const DESKTOP_AUTH_CALLBACK_URL = `${APP_PROTOCOL}://auth/callback`;
+const OAUTH_LOOPBACK_PORT = 3000;
+const OAUTH_FORWARD_PARAM_KEYS = [
+  "code",
+  "error",
+  "error_description",
+  "state",
+  "type",
+  "token_hash",
+  "access_token",
+  "refresh_token",
+] as const;
+const OAUTH_SIGNAL_PARAM_KEYS = [
+  "code",
+  "error",
+  "token_hash",
+  "access_token",
+  "refresh_token",
+  "type",
+] as const;
+const OAUTH_LOOPBACK_ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+let oauthLoopbackServer: ReturnType<typeof createServer> | null = null;
 
 function setupStableApplicationMenu(): void {
   const commonViewSubmenu: Electron.MenuItemConstructorOptions[] = [
@@ -277,6 +300,99 @@ function registerAsDefaultProtocolClient(): void {
   }
 }
 
+function hasOAuthSignal(searchParams: URLSearchParams): boolean {
+  return OAUTH_SIGNAL_PARAM_KEYS.some((key) => {
+    const value = searchParams.get(key);
+    return typeof value === "string" && value.length > 0;
+  });
+}
+
+function buildDesktopOAuthCallbackUrlFromRequest(requestUrl: URL): string | null {
+  const normalizedHost = requestUrl.hostname.toLowerCase();
+  if (!OAUTH_LOOPBACK_ALLOWED_HOSTS.has(normalizedHost)) {
+    return null;
+  }
+
+  const isExpectedPort = requestUrl.port === String(OAUTH_LOOPBACK_PORT);
+  if (!isExpectedPort) {
+    return null;
+  }
+
+  if (!hasOAuthSignal(requestUrl.searchParams)) {
+    return null;
+  }
+
+  const desktopCallbackUrl = new URL(DESKTOP_AUTH_CALLBACK_URL);
+  OAUTH_FORWARD_PARAM_KEYS.forEach((key) => {
+    const value = requestUrl.searchParams.get(key);
+    if (value) {
+      desktopCallbackUrl.searchParams.set(key, value);
+    }
+  });
+
+  return desktopCallbackUrl.toString();
+}
+
+function respondWithOAuthBridgePage(response: ServerResponse, success: boolean): void {
+  const title = success ? "Return to Murmur" : "OAuth Callback Error";
+  const message = success
+    ? "Sign-in finished. You can close this tab and return to the Murmur app."
+    : "Could not process OAuth callback. Return to the Murmur app and try again.";
+  const statusCode = success ? 200 : 400;
+
+  response.writeHead(statusCode, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  });
+  response.end(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;line-height:1.4"><h2>${title}</h2><p>${message}</p></body></html>`);
+}
+
+function handleOAuthLoopbackRequest(request: IncomingMessage, response: ServerResponse): void {
+  const hostHeader = request.headers.host ?? `localhost:${OAUTH_LOOPBACK_PORT}`;
+  const requestUrl = new URL(request.url ?? "/", `http://${hostHeader}`);
+  const desktopCallbackUrl = buildDesktopOAuthCallbackUrlFromRequest(requestUrl);
+
+  if (!desktopCallbackUrl) {
+    respondWithOAuthBridgePage(response, false);
+    return;
+  }
+
+  dispatchOAuthCallback(desktopCallbackUrl);
+  respondWithOAuthBridgePage(response, true);
+}
+
+function startOAuthLoopbackBridge(): void {
+  if (oauthLoopbackServer) {
+    return;
+  }
+
+  const server = createServer(handleOAuthLoopbackRequest);
+  oauthLoopbackServer = server;
+
+  server.on("error", (error) => {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EADDRINUSE") {
+      console.warn(`[electron] OAuth loopback bridge unavailable on port ${OAUTH_LOOPBACK_PORT} (already in use).`);
+      return;
+    }
+
+    console.error("[electron] OAuth loopback bridge error:", error);
+  });
+
+  server.listen(OAUTH_LOOPBACK_PORT, () => {
+    console.log(`[electron] OAuth loopback bridge listening on http://localhost:${OAUTH_LOOPBACK_PORT}`);
+  });
+}
+
+function stopOAuthLoopbackBridge(): void {
+  if (!oauthLoopbackServer) {
+    return;
+  }
+
+  oauthLoopbackServer.close();
+  oauthLoopbackServer = null;
+}
+
 function emitPendingOAuthCallback(): void {
   const pendingCallbackUrl = pendingOAuthCallbackStore.peek();
   if (!pendingCallbackUrl || !app.isReady()) {
@@ -322,6 +438,7 @@ function registerAuthIpcHandlers(config: SupabasePublicConfig): void {
       throw new Error("OAuth URL is not allowlisted.");
     }
 
+    parsed.searchParams.set("redirect_to", DESKTOP_AUTH_CALLBACK_URL);
     await shell.openExternal(parsed.toString());
   });
 
@@ -747,6 +864,7 @@ async function bootstrap(): Promise<void> {
   }
   await app.whenReady();
   registerAsDefaultProtocolClient();
+  startOAuthLoopbackBridge();
   setupStableApplicationMenu();
 
   registerAuthIpcHandlers(supabaseConfig);
@@ -773,6 +891,12 @@ async function bootstrap(): Promise<void> {
 }
 
 app.on("will-quit", () => {
+  stopOAuthLoopbackBridge();
+
+  if (!app.isReady()) {
+    return;
+  }
+
   globalShortcut.unregisterAll();
 });
 
