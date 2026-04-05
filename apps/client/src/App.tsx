@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "./hooks/useSession";
 import { useAudioPlayer } from "./features/narration/useAudioPlayer";
-import { ActionTimeline } from "./features/browser/ActionTimeline";
+import { ConversationTimeline } from "./features/conversation/ConversationTimeline";
 import { useAuth } from "./features/auth/AuthProvider";
 import { getSupabaseClient } from "./lib/supabase";
 import {
@@ -710,29 +710,14 @@ export function App() {
             </div>
 
             {activeView === "home" && (
-              <>
-                <div className="search-wrap" role="search">
-                  <span className="search-icon" aria-hidden="true">◦</span>
-                  <input
-                    className="search-input"
-                    type="search"
-                    placeholder="Search timeline logs"
-                    aria-label="Search timeline logs"
-                  />
-                </div>
-                <div className="app-topbar-home-spacer" aria-hidden="true" />
-              </>
+              <div className="app-topbar-home-spacer" aria-hidden="true" />
             )}
           </header>
 
           {activeView === "home" && (
             <div className="app-dashboard app-dashboard-timeline">
               {authError && <div className="alert alert-danger">{authError}</div>}
-              <ActionTimeline
-                title="Timeline"
-                emptyMessage="No events yet. Start a session to stream logs."
-                className="timeline-panel-devtools"
-              />
+              <ConversationTimeline />
             </div>
           )}
 
@@ -1014,6 +999,192 @@ export function App() {
                           Save
                         </button>
                       </div>
+                    </div>
+                  </article>
+
+                  <article className="section-card settings-step-card">
+                    <h4 className="settings-step-title">Frequent Info</h4>
+                    <p style={{ fontSize: "0.85rem", opacity: 0.7, margin: "0 0 0.75rem" }}>
+                      Commonly-used personal data that helps Murmur auto-fill forms.
+                    </p>
+
+                    <div className="field">
+                      <span className="field-label">Phone number</span>
+                      <input
+                        type="tel"
+                        value={settingsData?.frequentInfo?.phone ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, phone: event.target.value },
+                          });
+                        }}
+                        placeholder="(123) 456-7890"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Student ID / PID</span>
+                      <input
+                        type="text"
+                        value={settingsData?.frequentInfo?.pid ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, pid: event.target.value },
+                          });
+                        }}
+                        placeholder="e.g. A12345678"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Year in school</span>
+                      <select
+                        value={settingsData?.frequentInfo?.yearInSchool ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, yearInSchool: event.target.value },
+                          });
+                        }}
+                      >
+                        <option value="">Select...</option>
+                        <option value="1st year">1st year</option>
+                        <option value="2nd year">2nd year</option>
+                        <option value="3rd year">3rd year</option>
+                        <option value="4th year">4th year</option>
+                        <option value="5th year+">5th year+</option>
+                        <option value="Graduate">Graduate</option>
+                        <option value="N/A">N/A</option>
+                      </select>
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Major</span>
+                      <input
+                        type="text"
+                        value={settingsData?.frequentInfo?.major ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, major: event.target.value },
+                          });
+                        }}
+                        placeholder="e.g. Computer Science"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Current job / role</span>
+                      <input
+                        type="text"
+                        value={settingsData?.frequentInfo?.job ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, job: event.target.value },
+                          });
+                        }}
+                        placeholder="e.g. Software Engineer Intern"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Employer / Company</span>
+                      <input
+                        type="text"
+                        value={settingsData?.frequentInfo?.employer ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, employer: event.target.value },
+                          });
+                        }}
+                        placeholder="e.g. Acme Corp"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Mailing address</span>
+                      <textarea
+                        rows={2}
+                        value={settingsData?.frequentInfo?.address ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, address: event.target.value },
+                          });
+                        }}
+                        placeholder="123 Main St, City, ST 12345"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Date of birth</span>
+                      <input
+                        type="text"
+                        value={settingsData?.frequentInfo?.dateOfBirth ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, dateOfBirth: event.target.value },
+                          });
+                        }}
+                        placeholder="MM/DD/YYYY"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <span className="field-label">Gender</span>
+                      <select
+                        value={settingsData?.frequentInfo?.gender ?? ""}
+                        onChange={(event) => {
+                          if (!settingsData) return;
+                          setSettingsData({
+                            ...settingsData,
+                            frequentInfo: { ...settingsData.frequentInfo, gender: event.target.value },
+                          });
+                        }}
+                      >
+                        <option value="">Select...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-binary">Non-binary</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        onClick={() => {
+                          if (!settingsData) return;
+                          void (async () => {
+                            setSettingsError(null);
+                            setSettingsStatusMessage(null);
+                            try {
+                              await persistSettingsData(settingsData);
+                              setSettingsStatusMessage("Frequent info saved.");
+                            } catch (saveError) {
+                              setSettingsError(saveError instanceof Error ? saveError.message : "Failed to save frequent info.");
+                            }
+                          })();
+                        }}
+                        disabled={isSavingSettingsData}
+                      >
+                        Save
+                      </button>
                     </div>
                   </article>
 

@@ -1848,6 +1848,7 @@ body::before {
   align-content: start;
 }
 
+
 .app-dashboard-settings {
   grid-template-columns: minmax(0, 720px);
   align-content: start;
@@ -2216,6 +2217,115 @@ body::before {
 .timeline-panel-devtools .timeline-time {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.71rem;
+}
+
+/* ── Conversation Timeline ── */
+
+.conversation-timeline {
+  grid-area: timeline;
+  min-height: min(72vh, 640px);
+  max-height: min(72vh, 640px);
+}
+
+.app-screen .conversation-timeline {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.conversation-empty {
+  color: #8f9aa2;
+  font-size: 0.88rem;
+}
+
+.conversation-entry {
+  padding: 12px 0;
+  border-bottom: 1px solid #2a3138;
+  animation: fadeSlideIn 0.25s ease-out both;
+  animation-delay: calc(var(--item-index, 0) * 30ms);
+}
+
+.conversation-entry:last-of-type {
+  border-bottom: none;
+}
+
+.conversation-question,
+.conversation-answer {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.conversation-answer {
+  padding-left: 12px;
+  border-left: 2px solid #3a434a;
+  margin-top: 6px;
+}
+
+.conversation-answer-pending {
+  border-left-color: #f3c88f;
+}
+
+.conversation-role {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.conversation-role-user {
+  color: #9ec6db;
+}
+
+.conversation-role-assistant {
+  color: #e4b98f;
+}
+
+.conversation-time {
+  font-size: 0.68rem;
+  color: #8f9aa2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  margin-left: 8px;
+}
+
+.conversation-text {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #d4dbe2;
+  margin: 0;
+}
+
+.conversation-thinking {
+  color: #f3c88f;
+  font-style: italic;
+}
+
+.conversation-partial-text {
+  color: #8f9aa2;
+  font-style: italic;
+}
+
+.conversation-entry-partial {
+  border-bottom: none;
+  opacity: 0.7;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-entry {
+    animation: none;
+  }
 }
 
 .event-item {
